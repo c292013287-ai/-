@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// 系统用户
+model User {
+  id        Int       @id @default(autoincrement())
+  username  String    @unique @db.VarChar(50)
+  password  String    @db.VarChar(255)
+  name      String    @db.VarChar(50)
+  role      String    @default("admin") @db.VarChar(20)
+  status    String    @default("active") @db.VarChar(20)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// 企业微信主体
+model WecomEntity {
+  id           Int       @id @default(autoincrement())
+  name         String    @db.VarChar(100)
+  corpid       String    @db.VarChar(100)
+  secret       String    @db.VarChar(255)
+  status       String    @default("active") @db.VarChar(20)
+  quotaTotal   Int       @default(0) @map("quota_total")
+  quotaBalance Int       @default(0) @map("quota_balance")
+  lastSyncAt   DateTime? @map("last_sync_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  records     ConsumptionRecord[]
+  syncLogs    SyncLog[]
+
+  @@map("wecom_entities")
+}
+
+// 消耗记录（按日汇总）
+model ConsumptionRecord {
+  id          Int       @id @default(autoincrement())
+  entityId    Int       @map("entity_id")
+  date        DateTime  @db.Date
+  consumption Int       @default(0)
+  calls       Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  entity      WecomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, date])
+  @@map("consumption_records")
+}
+
+// 同步日志
+model SyncLog {
+  id        Int       @id @default(autoincrement())
+  entityId  Int       @map("entity_id")
+  status    String    @default("success") @db.VarChar(20)
+  message   String?   @db.Text
+  syncedAt  DateTime  @default(now()) @map("synced_at")
+
+  entity    WecomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@map("sync_logs")
+}
