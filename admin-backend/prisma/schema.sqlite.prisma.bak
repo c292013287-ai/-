@@ -44,7 +44,6 @@ model ConsumptionRecord {
   date        DateTime
   consumption Int      @default(0)
   calls       Int      @default(0)
-  quotaBalance Int     @default(0) @map("quota_balance")
   createdAt   DateTime @default(now()) @map("created_at")
 
   entity WecomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)

@@ -3,6 +3,9 @@ import client from './client';
 export interface WecomEntity {
   id: number;
   name: string;
+  sku: string | null;
+  rechargeAmount: number;
+  monthlyBudget: number;
   corpid: string;
   secret: string;
   status: string;
@@ -15,6 +18,9 @@ export interface WecomEntity {
 
 export interface EntityFormData {
   name: string;
+  sku?: string;
+  rechargeAmount?: number;
+  monthlyBudget?: number;
   corpid: string;
   secret: string;
   quotaTotal?: number;
@@ -42,4 +48,17 @@ export async function updateEntity(id: number, form: Partial<EntityFormData & { 
 
 export async function deleteEntity(id: number): Promise<void> {
   await client.delete(`/entities/${id}`);
+}
+
+export interface SyncResult {
+  success: boolean;
+  quotaTotal: number;
+  quotaBalance: number;
+  consumption: number;
+  quotaList: Array<{ expireDate: number; balance: number }>;
+}
+
+export async function syncEntity(id: number): Promise<SyncResult> {
+  const { data } = await client.post(`/entities/${id}/sync`);
+  return data;
 }

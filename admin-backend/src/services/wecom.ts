@@ -88,6 +88,30 @@ export async function getLinkDetail(corpid: string, secret: string, linkId: stri
   return res.data;
 }
 
+// 获客助手 - 获取配额信息（企业级别，不依赖获客链接）
+export async function getQuotaInfo(corpid: string, secret: string): Promise<{
+  total: number;
+  balance: number;
+  quotaList: Array<{ expireDate: number; balance: number }>;
+}> {
+  const token = await getAccessToken(corpid, secret);
+  const res = await axios.post(
+    `${WECOM_API_BASE}/cgi-bin/externalcontact/customer_acquisition_quota`,
+    {},
+    { params: { access_token: token } }
+  );
+
+  if (res.data.errcode !== 0) {
+    throw new Error(`获取配额失败: ${res.data.errmsg}`);
+  }
+
+  return {
+    total: res.data.total,
+    balance: res.data.balance,
+    quotaList: res.data.quota_list || [],
+  };
+}
+
 // 获客助手 - 获取剩余使用量 (仅返回配额余额)
 export async function getQuotaBalance(corpid: string, secret: string): Promise<{
   total: number;

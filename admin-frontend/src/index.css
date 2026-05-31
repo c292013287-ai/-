@@ -13,3 +13,28 @@ body {
 #root {
   min-height: 100vh;
 }
+
+/* 倒计时预警行高亮 */
+.row-warning {
+  background-color: #fff2f0 !important;
+}
+
+.row-warning:hover > td {
+  background-color: #ffebeb !important;
+}
+
+/* 表格圆角 */
+.ant-table-wrapper .ant-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* 卡片阴影 */
+.ant-card {
+  border-radius: 8px;
+}
+
+/* 弹窗圆角 */
+.ant-modal-content {
+  border-radius: 10px;
+}
