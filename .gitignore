@@ -6,3 +6,4 @@ dist/
 .npm-cache/
 .workbuddy/
 .codebuddy/
+*.db
