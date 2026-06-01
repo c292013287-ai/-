@@ -37,6 +37,7 @@ model WecomEntity {
 
   records  ConsumptionRecord[]
   syncLogs SyncLog[]
+  recharges RechargeRecord[]
 
   @@map("wecom_entities")
 }
@@ -66,4 +67,19 @@ model SyncLog {
   entity WecomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
   @@map("sync_logs")
+}
+
+model RechargeRecord {
+  id          Int      @id @default(autoincrement())
+  entityId    Int      @map("entity_id")
+  amount      Int
+  rechargeDate DateTime @map("recharge_date")
+  method      String   @default("银行转账")
+  remark      String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  entity WecomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@map("recharge_records")
 }

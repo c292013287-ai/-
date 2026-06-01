@@ -4,16 +4,16 @@ import { Layout, Menu, Button, Dropdown, Breadcrumb, Typography, theme } from 'a
 import {
   DashboardOutlined, TeamOutlined, BarChartOutlined,
   SettingOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  UserOutlined, LogoutOutlined, ApiOutlined,
+  UserOutlined, LogoutOutlined, ApiOutlined, DollarOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../store/authStore';
 
 const { Header, Sider, Content } = Layout;
-const { Text } = Typography;
 
 const breadcrumbMap: Record<string, { label: string; icon: React.ReactNode }> = {
-  '/': { label: '预算情况', icon: <DashboardOutlined /> },
+  '/': { label: '资源预警', icon: <DashboardOutlined /> },
   '/consumption': { label: '消耗监控', icon: <BarChartOutlined /> },
+  '/recharges': { label: '充值记录', icon: <DollarOutlined /> },
   '/entities': { label: '主体管理', icon: <TeamOutlined /> },
   '/settings': { label: '系统设置', icon: <SettingOutlined /> },
 };
@@ -28,8 +28,9 @@ export default function AppLayout() {
   const pageInfo = breadcrumbMap[location.pathname] || { label: '页面', icon: null };
 
   const menuItems = [
-    { key: '/', icon: <DashboardOutlined />, label: '预算情况' },
+    { key: '/', icon: <DashboardOutlined />, label: '资源预警' },
     { key: '/consumption', icon: <BarChartOutlined />, label: '消耗监控' },
+    { key: '/recharges', icon: <DollarOutlined />, label: '充值记录' },
     { key: '/entities', icon: <TeamOutlined />, label: '主体管理' },
     { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
   ];
