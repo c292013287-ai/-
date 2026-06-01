@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, Button, Dropdown, Breadcrumb, Typography, theme } from 'antd';
+import { Layout, Menu, Button, Dropdown, Breadcrumb, theme } from 'antd';
 import {
   DashboardOutlined, TeamOutlined, BarChartOutlined,
   SettingOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  UserOutlined, LogoutOutlined, ApiOutlined, DollarOutlined,
+  UserOutlined, LogoutOutlined, DollarOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../store/authStore';
 
@@ -65,24 +65,17 @@ export default function AppLayout() {
       >
         <div style={{
           height: 64,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start',
+          paddingLeft: collapsed ? 0 : 24,
           borderBottom: '1px solid rgba(255,255,255,0.08)',
           background: 'linear-gradient(135deg, rgba(24,144,255,0.15) 0%, rgba(24,144,255,0) 100%)',
         }}>
-          <div style={{
-            width: 36, height: 36,
-            background: 'linear-gradient(135deg, #1890ff 0%, #096dd9 100%)',
-            borderRadius: 8,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <ApiOutlined style={{ fontSize: 22, color: '#fff' }} />
-          </div>
           {!collapsed && (
             <span style={{
-              color: '#fff', marginLeft: 12, fontSize: 16, fontWeight: 600,
+              color: '#fff', fontSize: 16, fontWeight: 600,
               whiteSpace: 'nowrap', letterSpacing: 1,
             }}>
-              获客监控
+              开开华彩
             </span>
           )}
         </div>

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Card, message, Typography } from 'antd';
-import { UserOutlined, LockOutlined, ApiOutlined } from '@ant-design/icons';
+import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { login } from '../api/auth';
 import { useAuthStore } from '../store/authStore';
 
@@ -36,7 +36,16 @@ export default function Login() {
     }}>
       <Card style={{ width: 400, borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <ApiOutlined style={{ fontSize: 48, color: '#667eea' }} />
+          <img
+            src="/logo.png"
+            alt="开开华彩"
+            style={{
+              width: 64,
+              height: 64,
+              objectFit: 'contain',
+              marginBottom: 16,
+            }}
+          />
           <Title level={3} style={{ marginTop: 16, marginBottom: 4 }}>
             获客助手监控系统
           </Title>

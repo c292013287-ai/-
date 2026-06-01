@@ -33,7 +33,7 @@ export default function ConsumptionMonitor() {
     setLoading(true);
     const params: any = { page: pagination.current, pageSize: pagination.pageSize, startDate: dateRange[0].format('YYYY-MM-DD'), endDate: dateRange[1].format('YYYY-MM-DD') };
     if (entityFilter) params.entityId = entityFilter;
-    getConsumptionTrend({ entityId: entityFilter, startDate: params.startDate, endDate: params.endDate }).then(setChartData).catch(() => setChartData([]));
+    getConsumptionTrend({ entityId: entityFilter || undefined, days: 30 }).then(setChartData).catch(() => setChartData([]));
     getConsumptionList(params).then(res => { setRecords(res.data); setPagination(p => ({ ...p, total: res.total })); }).finally(() => setLoading(false));
   };
 

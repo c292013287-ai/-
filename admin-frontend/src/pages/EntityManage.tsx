@@ -22,7 +22,7 @@ export default function EntityManage() {
 
   const handleSync = async (id: number, name: string) => {
     message.loading({ content: `正在同步「${name}」...`, key: 'sync' });
-    try { const r = await syncEntity(id); message.success({ content: `「${name}」同步完成`, key: 'sync' }); fetchData(); }
+    try { await syncEntity(id); message.success({ content: `「${name}」同步完成`, key: 'sync' }); fetchData(); }
     catch { message.error({ content: '同步失败', key: 'sync' }); }
   };
 
