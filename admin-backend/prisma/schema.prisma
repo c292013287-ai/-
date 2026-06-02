@@ -74,7 +74,9 @@ model RechargeRecord {
   entityId    Int      @map("entity_id")
   amount      Int
   rechargeDate DateTime @map("recharge_date")
-  method      String   @default("银行转账")
+  method      String   @default("微信支付")
+  orderNumber String?  @map("order_number")
+  feeAmount   Int?     @map("fee_amount")
   remark      String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -82,4 +84,16 @@ model RechargeRecord {
   entity WecomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
   @@map("recharge_records")
+}
+
+model Announcement {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String
+  tag       String   @default("系统")
+  date      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("announcements")
 }

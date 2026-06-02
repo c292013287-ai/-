@@ -28,3 +28,11 @@ export function daysAgo(n: number): Date {
   d.setDate(d.getDate() - n);
   return d;
 }
+
+/** 解析日期时间字符串 */
+export function parseDateTime(s: string): Date {
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+  const [y, m, day] = s.split('-').map(Number);
+  return new Date(y, m - 1, day);
+}

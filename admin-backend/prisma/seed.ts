@@ -63,6 +63,15 @@ async function main() {
   }
   console.log('消耗记录创建成功');
 
+  await prisma.announcement.deleteMany();
+  const notices = [
+    { title: '系统上线通知', content: '多主体企微获客助手监控系统已正式上线运行，请各主体负责人及时关注配额消耗情况。', tag: '系统', date: '2026-06-01' },
+    { title: '数据同步说明', content: '系统每 5 分钟自动同步企微配额数据，消耗记录每日更新。如发现数据异常，请联系管理员核查。', tag: '说明', date: '2026-05-28' },
+    { title: '充值记录功能上线', content: '充值记录页面已上线，支持查看各主体历史充值明细，确保数据可追溯、可核对。', tag: '更新', date: '2026-05-25' },
+  ];
+  for (const n of notices) await prisma.announcement.create({ data: n });
+  console.log('公告种子数据完成');
+
   console.log('种子数据初始化完成！');
   console.log('默认账号: admin / admin123');
 }

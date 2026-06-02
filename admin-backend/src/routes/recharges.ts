@@ -1,12 +1,11 @@
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
-import { parseDate, fmtDate } from '../lib/date';
+import { parseDate, parseDateTime } from '../lib/date';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 
 const router = Router();
 router.use(authMiddleware);
 
-// GET /api/recharges
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const { entityId, startDate, endDate, page = '1', pageSize = '20' } = req.query;
@@ -26,7 +25,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         where, orderBy: { rechargeDate: 'desc' },
         skip: (Number(page) - 1) * Number(pageSize),
         take: Number(pageSize),
-        include: { entity: { select: { id: true, name: true, sku: true } } },
+        include: { entity: { select: { id: true, name: true, sku: true, corpid: true } } },
       }),
       prisma.rechargeRecord.count({ where }),
     ]);
@@ -38,20 +37,25 @@ router.get('/', async (req: AuthRequest, res: Response) => {
           lte: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999),
         },
       },
-      _sum: { amount: true },
+      _sum: { feeAmount: true },
     });
-    res.json({ data: rows, total, page: Number(page), pageSize: Number(pageSize), monthlyTotal: monthAgg._sum.amount || 0 });
+    res.json({ data: rows, total, page: Number(page), pageSize: Number(pageSize), monthlyTotal: monthAgg._sum.feeAmount || 0 });
   } catch {
     res.status(500).json({ error: '获取充值记录失败' });
   }
 });
 
-// POST /api/recharges
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
-    const { entityId, amount, rechargeDate, method, remark } = req.body;
+    const { entityId, amount, rechargeDate, method, orderNumber, feeAmount, remark } = req.body;
     const record = await prisma.rechargeRecord.create({
-      data: { entityId: Number(entityId), amount: Number(amount), rechargeDate: parseDate(rechargeDate), method: method || '银行转账', remark: remark || null },
+      data: {
+        entityId: Number(entityId), amount: Number(amount),
+        rechargeDate: parseDateTime(rechargeDate), method: method || '微信支付',
+        orderNumber: orderNumber || null,
+        feeAmount: feeAmount !== undefined ? Number(feeAmount) : null,
+        remark: remark || null,
+      },
       include: { entity: { select: { id: true, name: true } } },
     });
     res.json(record);
@@ -60,14 +64,15 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// PUT /api/recharges/:id
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const { amount, rechargeDate, method, remark } = req.body;
+    const { amount, rechargeDate, method, orderNumber, feeAmount, remark } = req.body;
     const data: any = {};
     if (amount !== undefined) data.amount = Number(amount);
-    if (rechargeDate) data.rechargeDate = parseDate(rechargeDate);
+    if (rechargeDate) data.rechargeDate = parseDateTime(rechargeDate);
     if (method !== undefined) data.method = method;
+    if (orderNumber !== undefined) data.orderNumber = orderNumber;
+    if (feeAmount !== undefined) data.feeAmount = Number(feeAmount);
     if (remark !== undefined) data.remark = remark;
     res.json(await prisma.rechargeRecord.update({
       where: { id: Number(req.params.id) }, data,
@@ -78,7 +83,6 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
   }
 });
 
-// DELETE /api/recharges/:id
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {
     await prisma.rechargeRecord.delete({ where: { id: Number(req.params.id) } });
