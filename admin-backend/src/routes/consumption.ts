@@ -59,18 +59,21 @@ router.get('/', async (req: AuthRequest, res: Response) => {
       prisma.consumptionRecord.count({ where }),
     ]);
 
-    // 动态累加充值
+    // 构建充值映射：有充值的日期，消耗需加上充值额
     const entityIds = [...new Set(records.map(r => r.entityId))];
     const minDate = records.length > 0 ? records[records.length - 1].date : new Date();
-    const maxDate = records.length > 0 ? records[0].date : new Date();
+    const maxDate = records.length > 0 ? new Date(records[0].date.getTime() + 86399000) : new Date();
     const rechargeMap = await buildRechargeMap(entityIds, minDate, maxDate);
 
     res.json({
       data: records.map(r => {
-        const amt = rechargeMap.get(`${r.entityId}_${fmtDate(r.date)}`) || 0;
+        const recharge = rechargeMap.get(`${r.entityId}_${fmtDate(r.date)}`) || 0;
+        // DB consumption 为负数（sync 写入 prevBalance-currentBalance，充值导致余额上涨）
+        // 时才加回充值额，正数代表已是实际消耗，无需补偿
+        const consumption = r.consumption < 0 ? r.consumption + recharge : r.consumption;
         return {
           id: r.id, entityId: r.entityId, date: r.date,
-          consumption: r.consumption + amt,
+          consumption,
           quotaBalance: r.quotaBalance,
           entity: { id: r.entity.id, name: r.entity.name, sku: r.entity.sku },
         };
@@ -98,13 +101,17 @@ router.get('/trend', async (req: AuthRequest, res: Response) => {
       include: { entity: { select: { name: true } } },
     });
 
+    // 构建充值映射
     const entityIds = [...new Set(records.map(r => r.entityId))];
     const rechargeMap = await buildRechargeMap(entityIds, startDate);
 
-    const items = records.map(r => ({
-      date: fmtDate(r.date),
-      consumption: r.consumption + (rechargeMap.get(`${r.entityId}_${fmtDate(r.date)}`) || 0),
-    }));
+    const items = records.map(r => {
+      const recharge = rechargeMap.get(`${r.entityId}_${fmtDate(r.date)}`) || 0;
+      return {
+        date: fmtDate(r.date),
+        consumption: r.consumption < 0 ? r.consumption + recharge : r.consumption,
+      };
+    });
 
     if (entityId) return res.json(items.map(i => ({ date: i.date, consumption: i.consumption })));
 

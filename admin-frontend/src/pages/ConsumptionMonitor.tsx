@@ -17,10 +17,7 @@ export default function ConsumptionMonitor() {
   const [entities, setEntities] = useState<WecomEntity[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [entityFilter, setEntityFilter] = useState<number | undefined>(() => {
-    const c = sessionStorage.getItem('cm_entity');
-    return c ? Number(c) : undefined;
-  });
+  const [entityFilter, setEntityFilter] = useState<number | undefined>();
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().subtract(30, 'day'), dayjs()]);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -39,15 +36,7 @@ export default function ConsumptionMonitor() {
 
   useEffect(() => { fetchData(); }, [entityFilter, dateRange, pagination.current, pagination.pageSize]);
 
-  useEffect(() => {
-    getEntities().then(ents => {
-      setEntities(ents);
-      if (!entityFilter) {
-        const kai = ents.find(e => e.name.includes('开开'));
-        if (kai) { setEntityFilter(kai.id); sessionStorage.setItem('cm_entity', String(kai.id)); }
-      }
-    });
-  }, []);
+  useEffect(() => { getEntities().then(setEntities); }, []);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -112,7 +101,7 @@ export default function ConsumptionMonitor() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16, padding: '12px 16px', background: '#fafafa', borderRadius: 8 }}>
         <Select placeholder="选择主体" allowClear style={{ width: 200 }} value={entityFilter}
-          onChange={(v) => { setEntityFilter(v); v ? sessionStorage.setItem('cm_entity', String(v)) : sessionStorage.removeItem('cm_entity'); setPagination(p => ({ ...p, current: 1 })); }}
+          onChange={(v) => { setEntityFilter(v); setPagination(p => ({ ...p, current: 1 })); }}
           options={entities.map(e => ({ label: e.name, value: e.id }))} />
         <DatePicker.RangePicker value={dateRange} onChange={d => { if (d?.[0] && d[1]) { setDateRange([d[0], d[1]]); setPagination(p => ({ ...p, current: 1 })); } }} />
         <div style={{ flex: 1 }} />

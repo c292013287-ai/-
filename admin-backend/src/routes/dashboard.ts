@@ -1,10 +1,87 @@
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
-import { startOfDay, daysAgo } from '../lib/date';
+import { startOfDay, daysAgo, fmtDate } from '../lib/date';
+import { buildRechargeMap } from '../lib/recharge';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 
 const router = Router();
 router.use(authMiddleware);
+
+// GET /api/dashboard/stats - 仪表盘/AI页面统计
+router.get('/stats', async (_req: AuthRequest, res: Response) => {
+  try {
+    const entities = await prisma.wecomEntity.findMany();
+    const today = startOfDay();
+    const threeDaysAgo = daysAgo(3);
+
+    // 活跃主体：近3天内有消耗记录的主体
+    const recentConsumers = await prisma.consumptionRecord.findMany({
+      where: { date: { gte: threeDaysAgo, lt: today }, consumption: { gt: 0 } },
+      distinct: ['entityId'],
+      select: { entityId: true },
+    });
+    const activeEntityCount = recentConsumers.length;
+
+    // 当月范围
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // 今日消耗（含充值补偿）
+    const todayRecords = await prisma.consumptionRecord.findMany({
+      where: { date: { gte: today, lt: new Date(today.getTime() + 86399000) } },
+    });
+    const todayEntityIds = [...new Set(todayRecords.map(r => r.entityId))];
+    const todayRechargeMap = await buildRechargeMap(todayEntityIds, today, new Date(today.getTime() + 86399000));
+    const todayConsumption = todayRecords.reduce((sum, r) => {
+      const recharge = todayRechargeMap.get(`${r.entityId}_${fmtDate(r.date)}`) || 0;
+      return sum + (r.consumption < 0 ? r.consumption + recharge : r.consumption);
+    }, 0);
+
+    // 当月累计消耗（含充值补偿）
+    const monthRecords = await prisma.consumptionRecord.findMany({
+      where: { date: { gte: monthStart } },
+    });
+    const monthEntityIds = [...new Set(monthRecords.map(r => r.entityId))];
+    const monthRechargeMap = await buildRechargeMap(monthEntityIds, monthStart);
+    const totalConsumption = monthRecords.reduce((sum, r) => {
+      const recharge = monthRechargeMap.get(`${r.entityId}_${fmtDate(r.date)}`) || 0;
+      return sum + (r.consumption < 0 ? r.consumption + recharge : r.consumption);
+    }, 0);
+
+    // 排名（当月）
+    const ranking = await prisma.consumptionRecord.groupBy({
+      by: ['entityId'],
+      where: { date: { gte: monthStart } },
+      _sum: { consumption: true },
+      orderBy: { _sum: { consumption: 'desc' } },
+      take: 10,
+    });
+
+    const entityMap = new Map(entities.map(e => [e.id, e]));
+    const entityRanking = ranking.map(r => {
+      const entity = entityMap.get(r.entityId);
+      return {
+        id: r.entityId,
+        name: entity?.name || `主体#${r.entityId}`,
+        quotaTotal: entity?.quotaTotal || 0,
+        quotaBalance: entity?.quotaBalance || 0,
+        totalConsumption: r._sum.consumption || 0,
+      };
+    });
+
+    res.json({
+      entityCount: entities.length,
+      activeEntityCount,
+      todayConsumption,
+      todayCalls: 0,
+      totalConsumption,
+      totalCalls: 0,
+      entityRanking,
+    });
+  } catch (error) {
+    res.status(500).json({ error: '获取统计数据失败' });
+  }
+});
 
 // GET /api/dashboard/budget - 资源预警列表
 router.get('/budget', async (req: AuthRequest, res: Response) => {
@@ -31,7 +108,7 @@ router.get('/budget', async (req: AuthRequest, res: Response) => {
     const sevenDaysAgo = daysAgo(7);
 
     const rows = await Promise.all(entities.map(async (entity) => {
-      const [monthAgg, weekCons, weekRech, monthRech] = await Promise.all([
+      const [monthAgg, weekCons, _weekRech, monthRech] = await Promise.all([
         prisma.consumptionRecord.aggregate({
           where: { entityId: entity.id, date: { gte: monthStart, lte: monthEnd } },
           _sum: { consumption: true },
@@ -50,8 +127,8 @@ router.get('/budget', async (req: AuthRequest, res: Response) => {
         }),
       ]);
 
+      const weekTotal = weekCons._sum.consumption || 0;
       const totalConsumption = (monthAgg._sum.consumption || 0) + (monthRech._sum.amount || 0);
-      const weekTotal = (weekCons._sum.consumption || 0) + (weekRech._sum.amount || 0);
       const avg7d = Math.round(weekTotal / 7);
       const countdownDays = avg7d > 0 ? Math.round((entity.quotaBalance / avg7d) * 100) / 100 : -1;
 
@@ -63,15 +140,25 @@ router.get('/budget', async (req: AuthRequest, res: Response) => {
         lastSyncAt: entity.lastSyncAt,
       };
     }));
-
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const todayAgg = await prisma.consumptionRecord.aggregate({
-      where: { date: { gte: today, lt: tomorrow } },
-      _sum: { consumption: true },
+    rows.sort((a, b) => {
+      if (a.countdownDays < 0 && b.countdownDays < 0) return 0;
+      if (a.countdownDays < 0) return 1;
+      if (b.countdownDays < 0) return -1;
+      return a.countdownDays - b.countdownDays;
     });
 
-    res.json({ rows, summary: { todayConsumption: todayAgg._sum.consumption || 0 } });
+    // 今日消耗总额（含充值补偿，与 consumption 路由保持一致）
+    const todayRecords = await prisma.consumptionRecord.findMany({
+      where: { date: { gte: today, lt: new Date(today.getTime() + 86399000) } },
+    });
+    const todayEntityIds = [...new Set(todayRecords.map(r => r.entityId))];
+    const todayRechargeMap = await buildRechargeMap(todayEntityIds, today, new Date(today.getTime() + 86399000));
+    const todayConsumption = todayRecords.reduce((sum, r) => {
+      const recharge = todayRechargeMap.get(`${r.entityId}_${fmtDate(r.date)}`) || 0;
+      return sum + (r.consumption < 0 ? r.consumption + recharge : r.consumption);
+    }, 0);
+
+    res.json({ rows, summary: { todayConsumption } });
   } catch (error) {
     res.status(500).json({ error: '获取预算数据失败' });
   }
