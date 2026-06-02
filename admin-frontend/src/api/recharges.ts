@@ -2,8 +2,9 @@ import client from './client';
 
 export interface RechargeRecord {
   id: number; entityId: number; amount: number; rechargeDate: string;
-  method: string; remark: string | null;
-  entity: { id: number; name: string; sku?: string | null };
+  method: string; orderNumber: string | null; feeAmount: number | null;
+  remark: string | null;
+  entity: { id: number; name: string; sku?: string | null; corpid?: string };
   createdAt: string;
 }
 
@@ -19,14 +20,16 @@ export async function getRecharges(params: {
 }
 
 export async function createRecharge(body: {
-  entityId: number; amount: number; rechargeDate: string; method?: string; remark?: string;
+  entityId: number; amount: number; rechargeDate: string; method?: string;
+  orderNumber?: string; feeAmount?: number; remark?: string;
 }): Promise<RechargeRecord> {
   const { data } = await client.post('/recharges', body);
   return data;
 }
 
 export async function updateRecharge(id: number, body: {
-  amount?: number; rechargeDate?: string; method?: string; remark?: string;
+  amount?: number; rechargeDate?: string; method?: string;
+  orderNumber?: string; feeAmount?: number; remark?: string;
 }): Promise<RechargeRecord> {
   const { data } = await client.put(`/recharges/${id}`, body);
   return data;

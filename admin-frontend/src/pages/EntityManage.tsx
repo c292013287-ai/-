@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Space, Tag, Popconfirm, message } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SyncOutlined, TeamOutlined } from '@ant-design/icons';
-import { getEntities, createEntity, updateEntity, deleteEntity, syncEntity, type WecomEntity, type EntityFormData } from '../api/entities';
+import { Table, Button, Modal, Form, Input, InputNumber, Space, Tag, message } from 'antd';
+import { PlusOutlined, EditOutlined, ReloadOutlined, SyncOutlined, TeamOutlined } from '@ant-design/icons';
+import { getEntities, createEntity, updateEntity, syncEntity, type WecomEntity, type EntityFormData } from '../api/entities';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 
@@ -18,7 +18,6 @@ export default function EntityManage() {
 
   const handleCreate = () => { setEditingId(null); form.resetFields(); setModalOpen(true); };
   const handleEdit = (e: WecomEntity) => { setEditingId(e.id); form.setFieldsValue(e); setModalOpen(true); };
-  const handleDelete = async (id: number) => { try { await deleteEntity(id); message.success('删除成功'); fetchData(); } catch { message.error('删除失败'); } };
 
   const handleSync = async (id: number, name: string) => {
     message.loading({ content: `正在同步「${name}」...`, key: 'sync' });
@@ -57,7 +56,6 @@ export default function EntityManage() {
         <Space>
           <Button size="small" icon={<SyncOutlined />} onClick={() => handleSync(r.id, r.name)}>同步</Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>
-          <Popconfirm title="确定删除？" onConfirm={() => handleDelete(r.id)}><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm>
         </Space>
       )},
   ];
