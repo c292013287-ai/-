@@ -5,6 +5,7 @@
 import prisma from '../lib/prisma';
 import { startOfDay, fmtDate } from '../lib/date';
 import { getQuotaInfo } from './wecom';
+import { buildRechargeMap } from '../lib/recharge';
 
 interface SyncParams {
   entity: { id: number; name: string; corpid: string; secret: string; quotaTotal: number };
@@ -43,7 +44,11 @@ export async function syncEntityQuota(params: SyncParams) {
   }));
 
   const prevBalance = yesterdayRecord?.quotaBalance ?? entity.quotaTotal;
-  const consumption = hasHistory ? prevBalance - quota.balance : 0;
+  // 今日充值补偿：配额余额因充值上涨，需加回充值得出实际消耗
+  const todayRechargeMap = await buildRechargeMap([entity.id], utcToday, new Date(utcToday.getTime() + 86399000));
+  const todayRecharge = todayRechargeMap.get(`${entity.id}_${fmtDate(utcToday)}`) || 0;
+  const rawConsumption = hasHistory ? prevBalance - quota.balance : 0;
+  const consumption = Math.max(0, rawConsumption + todayRecharge);
 
   // 写入今日消耗（先删后建，用 UTC 时间避免重复）
   await prisma.consumptionRecord.deleteMany({

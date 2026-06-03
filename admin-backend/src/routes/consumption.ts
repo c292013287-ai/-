@@ -29,9 +29,18 @@ async function recalculateChain(entityId: number, fromDate: Date) {
     orderBy: { date: 'asc' },
   });
 
+  // 构建充值映射
+  const dateRange = records.map(r => r.date);
+  const minDate = dateRange.length ? new Date(Math.min(...dateRange.map(d => d.getTime()))) : fromDate;
+  const maxDate = dateRange.length ? new Date(Math.max(...dateRange.map(d => d.getTime()))) : fromDate;
+  maxDate.setHours(23, 59, 59, 999);
+  const rechargeMap = await buildRechargeMap([entityId], minDate, maxDate);
+
   for (let i = 0; i < records.length; i++) {
     const r = records[i];
-    const consumption = (isHead && i === 0) ? 0 : prevBalance - r.quotaBalance;
+    const raw = (isHead && i === 0) ? 0 : prevBalance - r.quotaBalance;
+    const recharge = rechargeMap.get(`${entityId}_${fmtDate(r.date)}`) || 0;
+    const consumption = Math.max(0, raw + recharge);
     await prisma.consumptionRecord.update({ where: { id: r.id }, data: { consumption } });
     prevBalance = r.quotaBalance;
   }

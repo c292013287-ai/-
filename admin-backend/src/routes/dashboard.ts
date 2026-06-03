@@ -127,8 +127,8 @@ router.get('/budget', async (req: AuthRequest, res: Response) => {
         }),
       ]);
 
-      const weekTotal = weekCons._sum.consumption || 0;
-      const totalConsumption = (monthAgg._sum.consumption || 0) + (monthRech._sum.amount || 0);
+      const weekTotal = Math.max(0, weekCons._sum.consumption || 0);
+      const totalConsumption = Math.max(0, monthAgg._sum.consumption || 0);
       const avg7d = Math.round(weekTotal / 7);
       const countdownDays = avg7d > 0 ? Math.round((entity.quotaBalance / avg7d) * 100) / 100 : -1;
 
