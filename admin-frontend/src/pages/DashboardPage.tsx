@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Row, Col, Card, Statistic, Spin, Typography, Empty, Table, Tag } from 'antd';
-import { TeamOutlined, DollarOutlined, ThunderboltOutlined, RiseOutlined } from '@ant-design/icons';
+import { TeamOutlined, NumberOutlined, ThunderboltOutlined, RiseOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { getDashboardStats, type DashboardStats } from '../api/dashboard';
 import { getRecharges, type RechargeRecord } from '../api/recharges';
@@ -32,12 +32,12 @@ export default function DashboardPage() {
         {[
           { title: '主体总数', value: stats?.entityCount || 0, icon: <TeamOutlined />, color: '#ed6a1c' },
           { title: '活跃主体', value: stats?.activeEntityCount || 0, icon: <RiseOutlined />, color: '#52c41a' },
-          { title: '今日消耗', value: stats?.todayConsumption || 0, icon: <ThunderboltOutlined />, color: '#1677ff', prefix: '¥' },
-          { title: '累计消耗', value: stats?.totalConsumption || 0, icon: <DollarOutlined />, color: '#722ed1', prefix: '¥' },
+          { title: '今日消耗', value: stats?.todayConsumption || 0, icon: <ThunderboltOutlined />, color: '#1677ff' },
+          { title: '累计消耗', value: stats?.totalConsumption || 0, icon: <NumberOutlined />, color: '#722ed1' },
         ].map(s => (
           <Col xs={12} sm={6} key={s.title}>
             <Card hoverable bodyStyle={{ padding: '20px 24px' }} style={{ borderRadius: 12 }}>
-              <Statistic title={<Text type="secondary" style={{ fontSize: 13 }}>{s.title}</Text>} value={s.value} prefix={s.prefix || s.icon} valueStyle={{ color: s.color, fontSize: 28, fontWeight: 600 }} />
+              <Statistic title={<Text type="secondary" style={{ fontSize: 13 }}>{s.title}</Text>} value={s.value} prefix={s.icon} valueStyle={{ color: s.color, fontSize: 28, fontWeight: 600 }} />
             </Card>
           </Col>
         ))}

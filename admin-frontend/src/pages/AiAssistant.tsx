@@ -1,226 +1,156 @@
-import { useEffect, useState } from 'react';
-import { Typography, Spin, Card, Row, Col, Tag, Divider, Empty } from 'antd';
-import { RobotOutlined, WarningOutlined,
-         RiseOutlined, ThunderboltOutlined } from '@ant-design/icons';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-         PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
+import { useEffect, useState, useMemo } from 'react';
+import { Typography, Spin, Card, Row, Col, Tag, Divider, Empty, Tabs, Progress } from 'antd';
+import { ThunderboltOutlined, WarningOutlined, RiseOutlined, BarChartOutlined } from '@ant-design/icons';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from 'recharts';
 import { getDashboardStats, getBudgetList, type DashboardStats, type BudgetRow } from '../api/dashboard';
 import { getConsumptionTrend, type TrendItem } from '../api/consumption';
 import { getEntities, type WecomEntity } from '../api/entities';
+import { getRecharges } from '../api/recharges';
+import dayjs from 'dayjs';
 
-const { Title, Text, Paragraph } = Typography;
-
+const { Title, Text } = Typography;
 const CHART_COLORS = ['#ed6a1c', '#1890ff', '#52c41a', '#faad14', '#eb2f96', '#722ed1'];
+
+type Period = 'day' | 'week' | 'month';
+
+interface ReportData {
+  stats: DashboardStats | null;
+  budgets: BudgetRow[];
+  trends: TrendItem[];
+  rechargeTotal: number;
+}
 
 export default function AiAssistant() {
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [budgets, setBudgets] = useState<BudgetRow[]>([]);
+  const [period, setPeriod] = useState<Period>('day');
+  const [dayData, setDayData] = useState<ReportData>({ stats: null, budgets: [], trends: [], rechargeTotal: 0 });
+  const [weekData, setWeekData] = useState<ReportData>({ stats: null, budgets: [], trends: [], rechargeTotal: 0 });
+  const [monthData, setMonthData] = useState<ReportData>({ stats: null, budgets: [], trends: [], rechargeTotal: 0 });
   const [entities, setEntities] = useState<WecomEntity[]>([]);
-  const [trends, setTrends] = useState<TrendItem[]>([]);
+
+  const fetchReport = async (p: Period) => {
+    const now = dayjs();
+    let start: string, end: string;
+    let trendDays: number;
+    if (p === 'day') { start = now.format('YYYY-MM-DD'); end = start; trendDays = 1; }
+    else if (p === 'week') { start = now.subtract(6, 'day').format('YYYY-MM-DD'); end = now.format('YYYY-MM-DD'); trendDays = 7; }
+    else { start = dayjs(new Date(now.year(), now.month(), 1)).format('YYYY-MM-DD'); end = now.format('YYYY-MM-DD'); trendDays = (now.diff(dayjs(start), 'day')) + 1; }
+
+    const [statsRes, budgetRes, trendRes, rechargeRes] = await Promise.all([
+      getDashboardStats(), getBudgetList(), getConsumptionTrend({ days: trendDays }), getRecharges({ startDate: start, endDate: end, pageSize: 999 }),
+    ]);
+    return {
+      stats: statsRes, budgets: budgetRes.rows,
+      trends: trendRes,
+      rechargeTotal: rechargeRes.monthlyTotal || 0,
+    };
+  };
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      getDashboardStats(),
-      getBudgetList(),
-      getEntities(),
-      getConsumptionTrend({ days: 30 }),
-    ])
-      .then(([s, b, e, t]) => {
-        setStats(s);
-        setBudgets(b.rows);
-        setEntities(e);
-        setTrends(t);
-      })
+    Promise.all([fetchReport('day'), fetchReport('week'), fetchReport('month'), getEntities()])
+      .then(([d, w, m, e]) => { setDayData(d); setWeekData(w); setMonthData(m); setEntities(e); })
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" tip="AI 正在分析数据..." /></div>;
-  }
+  const getCurrentData = () => {
+    if (period === 'day') return dayData;
+    if (period === 'week') return weekData;
+    return monthData;
+  };
 
-  if (!stats) {
-    return <Empty description="暂无数据" />;
-  }
+  const data = getCurrentData();
+  const { budgets, trends, rechargeTotal } = data;
 
-  // ---- 数据分析 ----
-  const activeEntities = entities.filter((e) => e.status === 'active');
-  const warningEntities = budgets.filter((r) => r.countdownDays >= 0 && r.countdownDays < 5);
-  const todayTotalConsumption = budgets.reduce((sum, r) => sum + r.actualConsumption, 0);
-
-  // 消耗榜单
-  const rankingData = stats.entityRanking?.slice(0, 10).map((e) => ({
-    name: e.name.length > 6 ? e.name.slice(0, 6) + '...' : e.name,
-    消耗: e.totalConsumption,
-    余额: e.quotaBalance,
-  })) || [];
-
-  // 预算使用率
-  const budgetUsage = budgets
-    .filter((b) => b.monthlyBudget > 0)
-    .map((b) => ({
-      name: b.name.length > 6 ? b.name.slice(0, 6) + '...' : b.name,
-      使用率: Math.min(100, Math.round((b.actualConsumption / b.monthlyBudget) * 100)),
-      fullName: b.name,
-    }))
-    .sort((a, b) => b.使用率 - a.使用率);
-
-  // 倒计时分布（饼图）
+  const warningEntities = budgets.filter(r => r.countdownDays >= 0 && r.countdownDays < 5);
+  const periodLabel = period === 'day' ? '今日' : period === 'week' ? '近7天' : '本月';
+  const avg7d = budgets.reduce((s, r) => s + r.avg7dConsumption, 0);
+  const periodTotal = trends.reduce((s, t) => s + t.consumption, 0);
+  const trendData = trends.map(t => ({ date: t.date?.slice(5) || t.date, consumption: t.consumption }));
+  const rankingTable = budgets.sort((a, b) => b.actualConsumption - a.actualConsumption).slice(0, 10);
   const countdownDist = [
-    { name: '不足3天', value: budgets.filter((r) => r.countdownDays >= 0 && r.countdownDays < 3).length, color: '#ff4d4f' },
-    { name: '3-5天', value: budgets.filter((r) => r.countdownDays >= 3 && r.countdownDays < 5).length, color: '#fa8c16' },
-    { name: '5-10天', value: budgets.filter((r) => r.countdownDays >= 5 && r.countdownDays < 10).length, color: '#fadb14' },
-    { name: '10天以上', value: budgets.filter((r) => r.countdownDays >= 10).length, color: '#52c41a' },
+    { name: '不足3天', value: budgets.filter(r => r.countdownDays >= 0 && r.countdownDays < 3).length, color: '#ff4d4f' },
+    { name: '3-5天', value: budgets.filter(r => r.countdownDays >= 3 && r.countdownDays < 5).length, color: '#fa8c16' },
+    { name: '5-10天', value: budgets.filter(r => r.countdownDays >= 5 && r.countdownDays < 10).length, color: '#fadb14' },
+    { name: '10天以上', value: budgets.filter(r => r.countdownDays >= 10).length, color: '#52c41a' },
+  ];
+  const rankingChart = rankingTable.slice(0, 8).map(r => ({
+    name: r.name.length > 8 ? r.name.slice(0, 8) : r.name,
+    消耗: r.actualConsumption,
+  }));
+
+  const summaryText = useMemo(() => {
+    const top1 = rankingTable[0];
+    const activeCount = entities.filter(e => e.status === 'active').length;
+    return `${periodLabel}共 ${activeCount} 个活跃主体，累计消耗 ${periodTotal.toLocaleString()}，` +
+      (top1 ? `消耗最高为 ${top1.name}（${top1.actualConsumption.toLocaleString()}），` : '') +
+      `充值总额 ¥${rechargeTotal.toLocaleString()}。` +
+      (warningEntities.length > 0 ? `⚠️ ${warningEntities.map(e => e.name).join('、')} 余额不足5天。` : '各主体配额充足。');
+  }, [periodLabel, periodTotal, rechargeTotal, rankingTable, warningEntities, entities]);
+
+  const tabItems = [
+    { key: 'day', label: '日报' },
+    { key: 'week', label: '周报' },
+    { key: 'month', label: '月报' },
   ];
 
-  // 趋势数据
-  const trendData = trends.map((t) => ({ date: t.date?.slice(5) || t.date, consumption: t.consumption }));
+  if (loading) return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>;
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto' }}>
-      {/* 标题 */}
-      <div style={{ marginBottom: 8 }}>
-        <Title level={2} style={{ margin: '0 0 4px 0' }}>
-          <RobotOutlined style={{ fontSize: 24, marginRight: 10, color: '#ed6a1c' }} />
-          AI 智能分析报告
-        </Title>
-        <Text type="secondary" style={{ fontSize: 13 }}>
-          基于 {entities.length} 个主体的实时数据，AI 自动生成分析报告
-        </Text>
+    <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <Title level={3} style={{ margin: 0 }}><BarChartOutlined style={{ marginRight: 8, color: '#ed6a1c' }} />BI分析报告</Title>
+        <Tabs activeKey={period} onChange={v => setPeriod(v as Period)} items={tabItems} style={{ marginBottom: 0 }} />
       </div>
-
-      <Divider style={{ margin: '16px 0 20px' }} />
+      <Text type="secondary" style={{ fontSize: 13, display: 'block', marginBottom: 16 }}>
+        {summaryText}
+      </Text>
+      <Divider style={{ margin: '0 0 20px' }} />
 
       {/* 核心指标 */}
-      <div style={{
-        display: 'flex', gap: 12, marginBottom: 24,
-      }}>
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         {[
-          { icon: <ThunderboltOutlined />, label: '活跃主体', value: activeEntities.length, unit: '个', color: '#ed6a1c' },
-          { icon: <RiseOutlined />, label: '今日消耗', value: todayTotalConsumption.toLocaleString(), unit: '', color: '#cf1322' },
-          { icon: <WarningOutlined />, label: '预警主体', value: warningEntities.length, unit: '个', color: '#ff4d4f' },
-          { icon: <RiseOutlined />, label: '总消耗', value: (stats.totalConsumption || 0).toLocaleString(), unit: '', color: '#1890ff' },
+          { title: `${periodLabel}消耗`, value: periodTotal, color: '#ed6a1c', icon: <ThunderboltOutlined /> },
+          { title: '7日均消耗', value: avg7d, color: '#1890ff', icon: <RiseOutlined /> },
+          { title: `${periodLabel}充值`, value: rechargeTotal, color: '#52c41a', unit: '¥', icon: <BarChartOutlined /> },
+          { title: '预警主体', value: warningEntities.length, color: '#ff4d4f', unit: '个', icon: <WarningOutlined /> },
         ].map((s, i) => (
-          <div key={i} style={{
-            flex: 1, padding: '16px 18px', borderRadius: 8,
-            background: '#fafafa', border: '1px solid #f0f0f0',
-          }}>
-            <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 4 }}>
-              {s.icon} {s.label}
-            </div>
-            <span style={{ fontSize: 24, fontWeight: 700, color: s.color }}>
-              {s.value}<span style={{ fontSize: 14, fontWeight: 400, color: '#8c8c8c' }}>{s.unit}</span>
-            </span>
-          </div>
+          <Col xs={12} sm={6} key={i}>
+            <Card bodyStyle={{ padding: '16px 20px' }} style={{ borderRadius: 10 }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>{s.title}</Text>
+              <div style={{ fontSize: 26, fontWeight: 700, color: s.color, marginTop: 4 }}>
+                {s.unit === '¥' ? '¥' : ''}{typeof s.value === 'number' ? s.value.toLocaleString() : s.value}
+              </div>
+            </Card>
+          </Col>
         ))}
-      </div>
-
-      {/* AI 文字分析 */}
-      <Card
-        size="small"
-        style={{ marginBottom: 24, borderRadius: 8, background: 'linear-gradient(135deg, #fff7e6 0%, #fffbe6 100%)' }}
-      >
-        <div style={{ display: 'flex', gap: 10 }}>
-          <RobotOutlined style={{ fontSize: 20, color: '#ed6a1c', marginTop: 2 }} />
-          <div>
-            <Text strong style={{ fontSize: 14 }}>AI 分析摘要</Text>
-            <Paragraph style={{ margin: '8px 0 0' }}>
-              {warningEntities.length > 0 ? (
-                <>
-                  ⚠️ <Text strong style={{ color: '#ff4d4f' }}>{warningEntities.map((e) => e.name).join('、')}</Text> 配额倒计时不足5天，需尽快充值。
-                </>
-              ) : '✅ 当前所有主体配额充足，运行状态正常。'}
-              近30天累计消耗 <Text strong>{stats.totalConsumption?.toLocaleString() || '--'}</Text>，
-              {budgetUsage.length > 0 && (
-                <>
-                  预算使用率最高的主体为 <Text strong style={{ color: '#ed6a1c' }}>{budgetUsage[0]?.fullName}</Text>（{budgetUsage[0]?.使用率}%）。
-                </>
-              )}
-            </Paragraph>
-          </div>
-        </div>
-      </Card>
+      </Row>
 
       {/* 图表区 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        {/* 消耗榜单 */}
-        <Col span={12}>
-          <Card size="small" title="主体消耗 Top10" style={{ borderRadius: 8, height: '100%' }}>
-            {rankingData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={rankingData} layout="vertical" margin={{ left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
-                  <XAxis type="number" tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={60} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: 6, border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
-                  />
-                  <Bar dataKey="消耗" fill="#ed6a1c" radius={[0, 4, 4, 0]} barSize={16} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <Empty description="暂无数据" />}
-          </Card>
-        </Col>
-
-        {/* 预算使用率 */}
-        <Col span={12}>
-          <Card size="small" title="预算使用率" style={{ borderRadius: 8, height: '100%' }}>
-            {budgetUsage.length > 0 ? (
-              <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={budgetUsage}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} unit="%" />
-                  <Tooltip
-                    formatter={(val: any) => [`${val}%`, '使用率']}
-                    contentStyle={{ borderRadius: 6, border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
-                  />
-                  <Bar dataKey="使用率" radius={[4, 4, 0, 0]} barSize={28}>
-                    {budgetUsage.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <Empty description="暂无数据" />}
-          </Card>
-        </Col>
-      </Row>
-
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        {/* 消耗趋势 */}
-        <Col span={14}>
-          <Card size="small" title="近30天消耗趋势" style={{ borderRadius: 8 }}>
+        <Col xs={24} lg={14}>
+          <Card size="small" title={`${periodLabel}消耗趋势`} style={{ borderRadius: 10 }}>
             {trendData.length > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={trendData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={4} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={period === 'day' ? 0 : 'preserveStartEnd'} />
                   <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: 6, border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
-                    formatter={(v: any) => [Number(v).toLocaleString(), '消耗']}
-                  />
-                  <Line type="monotone" dataKey="consumption" stroke="#ed6a1c" strokeWidth={2}
-                    dot={false} activeDot={{ r: 4, fill: '#ed6a1c' }} />
+                  <Tooltip formatter={(v: any) => [Number(v).toLocaleString(), '消耗']} contentStyle={{ borderRadius: 6, border: 'none' }} />
+                  <Line type="monotone" dataKey="consumption" stroke="#ed6a1c" strokeWidth={2} dot={period === 'day'} activeDot={{ r: 4 }} />
                 </LineChart>
               </ResponsiveContainer>
             ) : <Empty description="暂无数据" />}
           </Card>
         </Col>
 
-        {/* 倒计时分布 */}
-        <Col span={10}>
-          <Card size="small" title="配额倒计时分布" style={{ borderRadius: 8 }}>
+        <Col xs={24} lg={10}>
+          <Card size="small" title="配额倒计时分布" style={{ borderRadius: 10 }}>
             {countdownDist.reduce((s, c) => s + c.value, 0) > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
-                  <Pie data={countdownDist} cx="50%" cy="50%" innerRadius={50} outerRadius={80}
-                    dataKey="value" strokeWidth={3}>
-                    {countdownDist.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
+                  <Pie data={countdownDist} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value">
+                    {countdownDist.map((e, i) => <Cell key={i} fill={e.color} />)}
                   </Pie>
                   <Tooltip contentStyle={{ borderRadius: 6, border: 'none' }} />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -231,37 +161,53 @@ export default function AiAssistant() {
         </Col>
       </Row>
 
-      {/* AI 建议 */}
-      <Card
-        size="small"
-        title={<span><RobotOutlined style={{ color: '#ed6a1c', marginRight: 8 }} />AI 参考建议</span>}
-        style={{ borderRadius: 8 }}
-      >
-        <div style={{ padding: '0 4px' }}>
-          {warningEntities.length > 0 && (
-            <Paragraph>
-              <Text strong>1. 紧急充值：</Text>
-              {warningEntities.map((e, i) => (
-                <Tag key={e.id} color="error" style={{ marginLeft: i === 0 ? 8 : 4 }}>{e.name}</Tag>
-              ))}
-              配额即将耗尽，建议立即补充，避免影响获客链路。
-            </Paragraph>
-          )}
+      {/* 消耗排名 + 预算使用率 */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} lg={12}>
+          <Card size="small" title={<span>消耗排名 Top8 <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>累计消耗</Text></span>} style={{ borderRadius: 10 }}>
+            {rankingChart.length > 0 ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={rankingChart}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-20} textAnchor="end" height={60} />
+                  <YAxis tick={{ fontSize: 11 }} />
+                  <Tooltip formatter={(v: any) => [Number(v).toLocaleString(), '消耗']} contentStyle={{ borderRadius: 6, border: 'none' }} />
+                  <Bar dataKey="消耗" radius={[4, 4, 0, 0]}>
+                    {rankingChart.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <Empty description="暂无数据" />}
+          </Card>
+        </Col>
 
-          {budgetUsage.length > 0 && budgetUsage[0].使用率 > 80 && (
-            <Paragraph>
-              <Text strong>2. 预算调整：</Text>
-              <Tag color="orange">{budgetUsage[0].fullName}</Tag>
-              预算使用率已达 {budgetUsage[0].使用率}%，建议适当追加当月预算。
-            </Paragraph>
-          )}
-
-          <Paragraph>
-            <Text strong>{warningEntities.length > 0 ? '3' : '1'}. 优化建议：</Text>
-            根据近30天消耗趋势，建议重点关注消耗波动较大的主体，合理分配配额资源，建立定期充值机制避免倒计时告警。
-          </Paragraph>
-        </div>
-      </Card>
+        <Col xs={24} lg={12}>
+          <Card size="small" title={<span>主体详情 <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>消耗 + 预算使用率</Text></span>} style={{ borderRadius: 10 }}>
+            {rankingTable.length > 0 ? (
+              <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                {rankingTable.map(r => {
+                  const pct = r.monthlyBudget > 0 ? Math.min(100, Math.round((r.actualConsumption / r.monthlyBudget) * 100)) : 0;
+                  return (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', marginBottom: 10, gap: 10 }}>
+                      <Text style={{ width: 80, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {r.name}
+                      </Text>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 2 }}>
+                          <Text style={{ fontSize: 11, color: '#999' }}>{r.actualConsumption.toLocaleString()}</Text>
+                          <Text style={{ fontSize: 11, color: '#999' }}>{pct}%</Text>
+                        </div>
+                        <Progress percent={pct} showInfo={false} size="small" strokeColor={pct > 80 ? '#ff4d4f' : pct > 50 ? '#fa8c16' : '#52c41a'} />
+                      </div>
+                      {r.countdownDays >= 0 && r.countdownDays < 5 && <Tag color="error" style={{ margin: 0, fontSize: 10 }}>预警</Tag>}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : <Empty description="暂无数据" />}
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 }

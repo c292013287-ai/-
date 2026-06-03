@@ -10,7 +10,6 @@ import DashboardPage from './pages/DashboardPage';
 import EntityManage from './pages/EntityManage';
 import ConsumptionMonitor from './pages/ConsumptionMonitor';
 import RechargeRecord from './pages/RechargeRecord';
-import AccountManage from './pages/AccountManage';
 import AiAssistant from './pages/AiAssistant';
 
 export default function App() {
@@ -27,7 +26,6 @@ export default function App() {
               <Route path="/entities" element={<EntityManage />} />
               <Route path="/consumption" element={<ConsumptionMonitor />} />
               <Route path="/recharges" element={<RechargeRecord />} />
-              <Route path="/accounts" element={<AccountManage />} />
               <Route path="/ai" element={<AiAssistant />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

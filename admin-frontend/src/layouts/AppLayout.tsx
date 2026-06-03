@@ -31,8 +31,7 @@ export default function AppLayout() {
     { key: '/warnings', icon: <DashboardOutlined />, label: '资源预警' },
     { key: '/consumption', icon: <BarChartOutlined />, label: '消耗监控' },
     { key: '/recharges', icon: <DollarOutlined />, label: '充值记录' },
-    { key: '/accounts', icon: <UserOutlined />, label: '账号管理' },
-    { key: '/ai', icon: <RobotOutlined />, label: 'AI智能' },
+    { key: '/ai', icon: <RobotOutlined />, label: 'BI分析报告' },
   ];
   const breadcrumbMap: Record<string, { label: string; icon: React.ReactNode }> = {};
   routes.forEach(r => { breadcrumbMap[r.key] = { label: r.label, icon: r.icon }; });
