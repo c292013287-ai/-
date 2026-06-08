@@ -3,6 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Button, Dropdown, Breadcrumb, theme } from 'antd';
 import {
   DashboardOutlined, TeamOutlined, BarChartOutlined,
+  SafetyOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined,
   UserOutlined, LogoutOutlined, RobotOutlined,
   DollarOutlined, HomeOutlined, PieChartOutlined,
@@ -32,6 +33,7 @@ export default function AppLayout() {
     { key: '/consumption', icon: <BarChartOutlined />, label: '消耗监控' },
     { key: '/recharges', icon: <DollarOutlined />, label: '充值记录' },
     { key: '/ai', icon: <RobotOutlined />, label: 'BI分析报告' },
+    { key: '/risk', icon: <SafetyOutlined />, label: '主体风控' },
   ];
   const breadcrumbMap: Record<string, { label: string; icon: React.ReactNode }> = {};
   routes.forEach(r => { breadcrumbMap[r.key] = { label: r.label, icon: r.icon }; });

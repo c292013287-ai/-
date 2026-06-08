@@ -29,9 +29,10 @@ async function recalculateChain(entityId: number, fromDate: Date) {
     orderBy: { date: 'asc' },
   });
 
-  // 构建充值映射
+  // 构建充值映射（从链首前一天开始，防止跨天充值漏算）
   const dateRange = records.map(r => r.date);
   const minDate = dateRange.length ? new Date(Math.min(...dateRange.map(d => d.getTime()))) : fromDate;
+  minDate.setDate(minDate.getDate() - 1); // 往前多取1天覆盖跨天充值
   const maxDate = dateRange.length ? new Date(Math.max(...dateRange.map(d => d.getTime()))) : fromDate;
   maxDate.setHours(23, 59, 59, 999);
   const rechargeMap = await buildRechargeMap([entityId], minDate, maxDate);

@@ -44,11 +44,13 @@ export async function syncEntityQuota(params: SyncParams) {
   }));
 
   const prevBalance = yesterdayRecord?.quotaBalance ?? entity.quotaTotal;
-  // 今日充值补偿：配额余额因充值上涨，需加回充值得出实际消耗
-  const todayRechargeMap = await buildRechargeMap([entity.id], utcToday, new Date(utcToday.getTime() + 86399000));
-  const todayRecharge = todayRechargeMap.get(`${entity.id}_${fmtDate(utcToday)}`) || 0;
+  // 充值补偿：覆盖上次记录日期到今日，跨天充值不会漏算
+  const rechargeFrom = yesterdayRecord?.date || utcToday;
+  const rechargeMap = await buildRechargeMap([entity.id], rechargeFrom, new Date(utcToday.getTime() + 86399000));
+  let totalRecharge = 0;
+  rechargeMap.forEach(v => { totalRecharge += v; });
   const rawConsumption = hasHistory ? prevBalance - quota.balance : 0;
-  const consumption = Math.max(0, rawConsumption + todayRecharge);
+  const consumption = Math.max(0, rawConsumption + totalRecharge);
 
   // 写入今日消耗（先删后建，用 UTC 时间避免重复）
   await prisma.consumptionRecord.deleteMany({
