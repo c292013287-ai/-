@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-SERVER="root@47.95.226.204"
+SERVER="ubuntu@82.156.205.213"
 SERVER_PATH="/opt/resource-admin"
 BACKEND_NAME="admin-backend"
 
@@ -51,5 +51,5 @@ ENDSSH
 echo ""
 echo "========================================"
 echo "  部署完成！"
-echo "  访问: http://47.95.226.204/"
+echo "  访问: http://82.156.205.213/"
 echo "========================================"

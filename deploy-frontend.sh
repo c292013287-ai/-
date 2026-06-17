@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-SERVER="root@47.95.226.204"
+SERVER="ubuntu@82.156.205.213"
 SERVER_PATH="/opt/resource-admin"
-PROJECT="$(dirname "$0")"
+PROJECT="$(cd "$(dirname "$0")" && pwd)"
 
 echo "========================================"
 echo "  获客监控系统 - 快速前端部署"
@@ -30,4 +30,4 @@ ssh "$SERVER" "nginx -s reload"
 echo "  ✅ Nginx 已重载"
 
 echo ""
-echo "  部署完成 → http://47.95.226.204/"
+echo "  部署完成 → http://82.156.205.213/"

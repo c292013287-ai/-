@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-SERVER="root@47.95.226.204"
+SERVER="ubuntu@82.156.205.213"
 SERVER_PATH="/opt/resource-admin"
-PROJECT="$(dirname "$0")"
+PROJECT="$(cd "$(dirname "$0")" && pwd)"
 
 echo "========================================"
 echo "  获客监控系统 - 全量部署"
@@ -40,10 +40,10 @@ ssh "$SERVER" << 'ENDSSH'
 cd /opt/resource-admin/admin-backend
 npm install --production
 npx prisma generate
-pm2 restart resource-backend || pm2 start dist/index.js --name resource-backend
+pm2 restart admin-backend || pm2 start dist/index.js --name admin-backend
 pm2 save
 echo "✅ PM2 重启完成"
 ENDSSH
 
 echo ""
-echo "  部署完成 → http://47.95.226.204/"
+echo "  部署完成 → http://82.156.205.213/"

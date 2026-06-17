@@ -63,7 +63,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const [records, total] = await Promise.all([
       prisma.consumptionRecord.findMany({
         where, skip, take: Number(pageSize),
-        orderBy: { date: 'desc' },
+        orderBy: [{ date: 'desc' }, { consumption: 'desc' }, { id: 'desc' }],
         include: { entity: { select: { id: true, name: true, sku: true } } },
       }),
       prisma.consumptionRecord.count({ where }),
