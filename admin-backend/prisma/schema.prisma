@@ -35,21 +35,21 @@ model WecomEntity {
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  records  ConsumptionRecord[]
-  syncLogs SyncLog[]
+  records   ConsumptionRecord[]
+  syncLogs  SyncLog[]
   recharges RechargeRecord[]
 
   @@map("wecom_entities")
 }
 
 model ConsumptionRecord {
-  id          Int      @id @default(autoincrement())
-  entityId    Int      @map("entity_id")
-  date        DateTime
-  consumption Int      @default(0)
-  calls       Int      @default(0)
-  quotaBalance Int     @default(0) @map("quota_balance")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id           Int      @id @default(autoincrement())
+  entityId     Int      @map("entity_id")
+  date         DateTime
+  consumption  Int      @default(0)
+  calls        Int      @default(0)
+  quotaBalance Int      @default(0) @map("quota_balance")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   entity WecomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
@@ -70,16 +70,16 @@ model SyncLog {
 }
 
 model RechargeRecord {
-  id          Int      @id @default(autoincrement())
-  entityId    Int      @map("entity_id")
-  amount      Int
+  id           Int      @id @default(autoincrement())
+  entityId     Int      @map("entity_id")
+  amount       Int
   rechargeDate DateTime @map("recharge_date")
-  method      String   @default("微信支付")
-  orderNumber String?  @map("order_number")
-  feeAmount   Int?     @map("fee_amount")
-  remark      String?
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  method       String   @default("微信支付")
+  orderNumber  String?  @map("order_number")
+  feeAmount    Int?     @map("fee_amount")
+  remark       String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   entity WecomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
 

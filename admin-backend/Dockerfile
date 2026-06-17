@@ -7,7 +7,7 @@ RUN npm install --registry https://registry.npmmirror.com
 
 COPY . .
 
-RUN npm run build
+RUN npx prisma generate && npm run build
 
 FROM node:22-alpine
 
