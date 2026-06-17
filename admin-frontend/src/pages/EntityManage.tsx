@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Space, Tag, message } from 'antd';
-import { PlusOutlined, EditOutlined, ReloadOutlined, SyncOutlined, TeamOutlined } from '@ant-design/icons';
-import { getEntities, createEntity, updateEntity, syncEntity, type WecomEntity, type EntityFormData } from '../api/entities';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SyncOutlined, TeamOutlined } from '@ant-design/icons';
+import { getEntities, createEntity, updateEntity, deleteEntity, syncEntity, type WecomEntity, type EntityFormData } from '../api/entities';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 
@@ -23,6 +23,25 @@ export default function EntityManage() {
     message.loading({ content: `正在同步「${name}」...`, key: 'sync' });
     try { await syncEntity(id); message.success({ content: `「${name}」同步完成`, key: 'sync' }); fetchData(); }
     catch { message.error({ content: '同步失败', key: 'sync' }); }
+  };
+
+  const handleDelete = (r: WecomEntity) => {
+    Modal.confirm({
+      title: '确认删除',
+      content: `确定要删除主体「${r.name}」吗？删除后关联的消耗记录、同步日志等数据也会一并清除，此操作不可恢复。`,
+      okText: '确认删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          await deleteEntity(r.id);
+          message.success(`「${r.name}」已删除`);
+          fetchData();
+        } catch {
+          message.error('删除失败');
+        }
+      },
+    });
   };
 
   const handleSubmit = async () => {
@@ -51,11 +70,12 @@ export default function EntityManage() {
     { title: '配额余额', dataIndex: 'quotaBalance', key: 'quotaBalance', width: 110,
       render: (v: number) => <span style={{ color: v < 5000 ? '#ff4d4f' : '#52c41a', fontWeight: v < 5000 ? 600 : 400 }}>{v.toLocaleString()}</span> },
     { title: '最后同步', dataIndex: 'lastSyncAt', key: 'lastSyncAt', width: 170, render: (v: string | null) => v ? new Date(v).toLocaleString() : '-' },
-    { title: '操作', key: 'action', width: 230,
+    { title: '操作', key: 'action', width: 280,
       render: (_: any, r: WecomEntity) => (
         <Space>
           <Button size="small" icon={<SyncOutlined />} onClick={() => handleSync(r.id, r.name)}>同步</Button>
           <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>
+          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(r)}>删除</Button>
         </Space>
       )},
   ];

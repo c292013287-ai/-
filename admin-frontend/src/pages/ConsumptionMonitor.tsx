@@ -10,8 +10,6 @@ import { getEntities, syncEntity, type WecomEntity } from '../api/entities';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 
-const todayStr = dayjs().format('YYYY-MM-DD');
-
 export default function ConsumptionMonitor() {
   const [records, setRecords] = useState<ConsumptionRecord[]>([]);
   const [entities, setEntities] = useState<WecomEntity[]>([]);
@@ -47,7 +45,7 @@ export default function ConsumptionMonitor() {
     setSyncing(false); fetchData();
   };
 
-  const isToday = (r: ConsumptionRecord) => dayjs(r.date).format('YYYY-MM-DD') === todayStr;
+  const isToday = (r: ConsumptionRecord) => dayjs(r.date).format('YYYY-MM-DD') === dayjs().format('YYYY-MM-DD');
   const startEdit = (r: ConsumptionRecord) => { setEditingId(r.id); setEditValue(String(r.quotaBalance)); };
   const cancelEdit = () => setEditingId(null);
   const saveEdit = async (r: ConsumptionRecord) => {
@@ -86,7 +84,7 @@ export default function ConsumptionMonitor() {
         )},
   ];
 
-  const todayRecs = records.filter(r => dayjs(r.date).format('YYYY-MM-DD') === todayStr);
+  const todayRecs = records.filter(r => dayjs(r.date).format('YYYY-MM-DD') === dayjs().format('YYYY-MM-DD'));
   const todayCons = todayRecs.reduce((s, r) => s + r.consumption, 0);
 
   return (

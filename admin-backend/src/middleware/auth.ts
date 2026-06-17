@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 export interface AuthRequest extends Request {
   userId?: number;
   userRole?: string;
+  body: any;
+  params: any;
 }
 
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
