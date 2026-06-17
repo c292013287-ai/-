@@ -125,14 +125,14 @@ export default function RechargePage() {
   return (
     <div>
       <PageHeader title="充值记录" desc="各主体充值明细与本月汇总" />
-      <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+      <div className="summary-grid">
         <StatCard title="本月充值总额" value={monthlyTotal} suffix="元" gradient="green" color="#52c41a" prefix={<DollarOutlined style={{ color: '#52c41a' }} />} />
         <StatCard title="充值笔数" value={pagination.total} suffix="笔" gradient="blue" color="#1890ff" />
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, padding: '12px 16px', background: '#fafafa', borderRadius: 8 }}>
+      <div className="filter-bar">
         <Select placeholder="全部主体" allowClear style={{ width: 200 }} value={entityFilter} onChange={v => { setEntityFilter(v); setPagination(p => ({ ...p, current: 1 })); }} options={entities.map(e => ({ label: e.name, value: e.id }))} />
         <DatePicker.RangePicker value={dateRange} allowClear onChange={d => { setDateRange(d as any); setPagination(p => ({ ...p, current: 1 })); }} />
-        <div style={{ flex: 1 }} />
+        <div className="filter-bar-spacer" />
         <Button icon={<DownloadOutlined />} onClick={handleDownload}>下载</Button>
         <Upload accept=".xlsx,.xls,.csv" showUploadList={false} beforeUpload={handleUpload}><Button icon={<UploadOutlined />}>上传</Button></Upload>
         <Button type="link" size="small" onClick={handleDownloadTemplate} style={{ padding: 0 }}>下载模板</Button>

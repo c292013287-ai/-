@@ -54,26 +54,26 @@ export default function Home() {
 
   const metrics = [
     { title: '本月充值总额', value: monthlyRecharge, suffix: '元', icon: <DollarOutlined />, color: '#ed6a1c', route: '/recharges' },
-    { title: '今日消耗总额', value: todayConsumption, suffix: '元', icon: <ThunderboltOutlined />, color: '#1677ff', route: '/consumption' },
+    { title: '今日累计获客助手进量', value: todayConsumption, suffix: '个', icon: <ThunderboltOutlined />, color: '#1677ff', route: '/consumption' },
     { title: '预警主体', value: warningCount, suffix: '个', icon: <AlertOutlined />, color: warningCount > 0 ? '#ff4d4f' : '#52c41a', route: '/warnings' },
   ];
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
+    <div style={{ maxWidth: 980, margin: '0 auto' }}>
       <div style={{ marginBottom: 40 }}>
         <Title level={3} style={{ marginBottom: 4, fontWeight: 600 }}>{getGreeting()}</Title>
         <Text type="secondary" style={{ fontSize: 14 }}>欢迎回来，以下是系统运行概况</Text>
       </div>
       <Row gutter={[24, 24]} style={{ marginBottom: 48 }}>
         {metrics.map(m => (
-          <Col xs={24} sm={8} key={m.title}>
-            <Card hoverable bodyStyle={{ padding: '24px 28px' }} style={{ borderRadius: 12, cursor: 'pointer' }} onClick={() => navigate(m.route)}>
+          <Col xs={24} md={8} key={m.title}>
+            <Card className="home-metric-card" hoverable bodyStyle={{ padding: '24px 28px' }} style={{ borderRadius: 12, cursor: 'pointer', height: '100%' }} onClick={() => navigate(m.route)}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                <div>
-                  <Text type="secondary" style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>{m.title}</Text>
+                <div style={{ minWidth: 0 }}>
+                  <Text type="secondary" className="home-metric-title" style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>{m.title}</Text>
                   <div style={{ fontSize: 36, fontWeight: 700, color: m.color, lineHeight: 1.2 }}>{m.value.toLocaleString()}<Text style={{ fontSize: 16, fontWeight: 400, color: '#999', marginLeft: 4 }}>{m.suffix}</Text></div>
                 </div>
-                <div style={{ width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: m.color.includes('255') ? 'rgba(255,77,79,0.06)' : 'rgba(237,106,28,0.06)', color: m.color, fontSize: 22 }}>{m.icon}</div>
+                <div style={{ width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: m.color.includes('255') ? 'rgba(255,77,79,0.06)' : 'rgba(237,106,28,0.06)', color: m.color, fontSize: 22, flexShrink: 0, marginLeft: 12 }}>{m.icon}</div>
               </div>
             </Card>
           </Col>

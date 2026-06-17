@@ -97,8 +97,8 @@ export default function AiAssistant() {
   if (loading) return <div style={{ textAlign: 'center', padding: 80 }}><Spin size="large" /></div>;
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+    <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 4 }}>
         <Title level={3} style={{ margin: 0 }}><BarChartOutlined style={{ marginRight: 8, color: '#ed6a1c' }} />BI分析报告</Title>
         <Tabs activeKey={period} onChange={v => setPeriod(v as Period)} items={tabItems} style={{ marginBottom: 0 }} />
       </div>
@@ -129,7 +129,7 @@ export default function AiAssistant() {
       {/* 图表区 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} lg={14}>
-          <Card size="small" title={`${periodLabel}消耗趋势`} style={{ borderRadius: 10 }}>
+          <Card className="chart-card" size="small" title={`${periodLabel}消耗趋势`} style={{ borderRadius: 10, height: '100%' }}>
             {trendData.length > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
                 <LineChart data={trendData}>
@@ -145,7 +145,7 @@ export default function AiAssistant() {
         </Col>
 
         <Col xs={24} lg={10}>
-          <Card size="small" title="配额倒计时分布" style={{ borderRadius: 10 }}>
+          <Card className="chart-card" size="small" title="配额倒计时分布" style={{ borderRadius: 10, height: '100%' }}>
             {countdownDist.reduce((s, c) => s + c.value, 0) > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -164,7 +164,7 @@ export default function AiAssistant() {
       {/* 消耗排名 + 预算使用率 */}
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={12}>
-          <Card size="small" title={<span>消耗排名 Top8 <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>累计消耗</Text></span>} style={{ borderRadius: 10 }}>
+          <Card className="chart-card" size="small" title={<span>消耗排名 Top8 <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>累计消耗</Text></span>} style={{ borderRadius: 10, height: '100%' }}>
             {rankingChart.length > 0 ? (
               <ResponsiveContainer width="100%" height={260}>
                 <BarChart data={rankingChart}>
@@ -182,7 +182,7 @@ export default function AiAssistant() {
         </Col>
 
         <Col xs={24} lg={12}>
-          <Card size="small" title={<span>主体详情 <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>消耗 + 预算使用率</Text></span>} style={{ borderRadius: 10 }}>
+          <Card size="small" title={<span>主体详情 <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>消耗 + 预算使用率</Text></span>} style={{ borderRadius: 10, height: '100%' }}>
             {rankingTable.length > 0 ? (
               <div style={{ maxHeight: 300, overflowY: 'auto' }}>
                 {rankingTable.map(r => {

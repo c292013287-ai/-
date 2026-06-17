@@ -24,10 +24,9 @@ interface Props {
 export default function StatCard({ title, value, suffix, prefix, color, gradient, fontSize = 24 }: Props) {
   const g = gradient ? gradients[gradient] : undefined;
   return (
-    <div style={{
-      flex: 1, padding: '16px 20px',
+    <div className="stat-card" style={{
       background: g?.bg,
-      borderRadius: 8, border: `1px solid ${g?.border || '#eee'}`,
+      borderColor: g?.border || '#eee',
     }}>
       <Statistic
         title={title}

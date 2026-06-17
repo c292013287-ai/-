@@ -6,7 +6,6 @@ import AppLayout from './layouts/AppLayout';
 import Login from './pages/Login';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
-import DashboardPage from './pages/DashboardPage';
 import EntityManage from './pages/EntityManage';
 import ConsumptionMonitor from './pages/ConsumptionMonitor';
 import RechargeRecord from './pages/RechargeRecord';
@@ -22,7 +21,6 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route element={<AuthGuard><AppLayout /></AuthGuard>}>
               <Route path="/" element={<Home />} />
-              <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/warnings" element={<Dashboard />} />
               <Route path="/entities" element={<EntityManage />} />
               <Route path="/consumption" element={<ConsumptionMonitor />} />

@@ -67,13 +67,13 @@ export default function ConsumptionMonitor() {
     { title: '日期', dataIndex: 'date', key: 'date', width: 120, render: (v: string) => <span style={{ fontWeight: 500 }}>{dayjs(v).format('YYYY-MM-DD')}</span> },
     { title: '主体', key: 'entity', width: 140, render: (_: any, r: ConsumptionRecord) => r.entity?.name || '-' },
     { title: 'SKU', key: 'sku', width: 80, render: (_: any, r: ConsumptionRecord) => r.entity?.sku || '-' },
-    { title: '配额余额', dataIndex: 'quotaBalance', key: 'quotaBalance', width: 150,
+    { title: '获客助手余额', dataIndex: 'quotaBalance', key: 'quotaBalance', width: 150,
       render: (v: number, r: ConsumptionRecord) => editingId === r.id ? (
         <input type="number" autoFocus value={editValue} onChange={e => setEditValue(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') saveEdit(r); if (e.key === 'Escape') cancelEdit(); }}
           style={{ width: 100, padding: '4px 8px', border: '1px solid #1890ff', borderRadius: 4, outline: 'none', fontSize: 14 }} />
       ) : <span style={{ fontWeight: 500, color: isToday(r) ? '#1890ff' : undefined }}>{v.toLocaleString()}</span> },
-    { title: '今日消耗', dataIndex: 'consumption', key: 'consumption', width: 110, render: (v: number) => <span style={{ color: '#cf1322', fontWeight: 500 }}>{v.toLocaleString()}</span> },
+    { title: '今日累计获客助手进量', dataIndex: 'consumption', key: 'consumption', width: 170, render: (v: number) => <span style={{ color: '#cf1322', fontWeight: 500 }}>{v.toLocaleString()}</span> },
     { title: '操作', key: 'action', width: 200,
       render: (_: any, r: ConsumptionRecord) => isToday(r) ? <Button size="small" icon={<LockOutlined />} disabled>当日锁定</Button>
         : editingId === r.id ? (
@@ -91,18 +91,17 @@ export default function ConsumptionMonitor() {
     <div>
       <PageHeader title="消耗监控" desc="每日消耗记录与趋势分析" />
 
-      <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+      <div className="summary-grid">
         <StatCard title="查询记录" value={pagination.total} suffix="条" gradient="orange" />
-        <StatCard title="今日记录" value={todayRecs.length} suffix="条" gradient="blue" color="#1890ff" />
-        <StatCard title="今日消耗" value={todayCons} gradient="red" color="#cf1322" />
+        <StatCard title="今日累计获客助手进量" value={todayCons} gradient="red" color="#cf1322" />
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16, padding: '12px 16px', background: '#fafafa', borderRadius: 8 }}>
+      <div className="filter-bar">
         <Select placeholder="选择主体" allowClear style={{ width: 200 }} value={entityFilter}
           onChange={(v) => { setEntityFilter(v); setPagination(p => ({ ...p, current: 1 })); }}
           options={entities.map(e => ({ label: e.name, value: e.id }))} />
         <DatePicker.RangePicker value={dateRange} onChange={d => { if (d?.[0] && d[1]) { setDateRange([d[0], d[1]]); setPagination(p => ({ ...p, current: 1 })); } }} />
-        <div style={{ flex: 1 }} />
+        <div className="filter-bar-spacer" />
         <Button icon={<SyncOutlined spin={syncing} />} onClick={handleSync} loading={syncing}>同步</Button>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>新增记录</Button>
       </div>
@@ -121,14 +120,14 @@ export default function ConsumptionMonitor() {
         </Card>
       )}
 
-      <Table dataSource={records} columns={columns} rowKey="id" loading={loading} size="middle"
+      <Table dataSource={records} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 980 }}
         pagination={{ ...pagination, showSizeChanger: true, showTotal: t => `共 ${t} 条`, onChange: (page, pageSize) => setPagination({ ...pagination, current: page, pageSize }) }} />
 
       <Modal title="新增消耗记录" open={createOpen} onOk={handleCreate} onCancel={() => setCreateOpen(false)} destroyOnClose width={420}>
         <Form form={createForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="entityId" label="主体" rules={[{ required: true }]}><Select options={entities.filter(e => e.status === 'active').map(e => ({ label: e.name, value: e.id }))} /></Form.Item>
           <Form.Item name="date" label="日期" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
-          <Form.Item name="quotaBalance" label="配额余额"><Input /></Form.Item>
+          <Form.Item name="quotaBalance" label="获客助手余额"><Input /></Form.Item>
           <Form.Item name="consumption" label="消耗量"><Input /></Form.Item>
         </Form>
       </Modal>

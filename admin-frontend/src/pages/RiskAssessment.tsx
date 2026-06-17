@@ -123,14 +123,14 @@ export default function RiskAssessment() {
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: 40 }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ minWidth: 0 }}>
           <Title level={3} style={{ margin: 0, fontWeight: 600 }}>
             <SafetyOutlined style={{ marginRight: 8, color: '#ed6a1c' }} />🏢 健康运营监控测算
           </Title>
           <Text type="secondary">主体与成员两大维度健康监控 · 当前：{selectedName}</Text>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <Select
             placeholder="选择主体"
             style={{ width: 200 }}
@@ -298,7 +298,7 @@ export default function RiskAssessment() {
               {/* Member Table */}
               <Card size="small" title={<span>成员评分明细 <Text type="secondary" style={{ fontSize: 12 }}>(点击行查看详情)</Text></span>}
                 extra={
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <Select mode="multiple" placeholder="等级筛选" style={{ width: 130 }} size="small"
                       value={gradeFilter} onChange={v => setGradeFilter(v)}
                       options={[{ label: 'A级', value: 'A' }, { label: 'B级', value: 'B' }, { label: 'C级', value: 'C' }, { label: 'D级', value: 'D' }]}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Button, Dropdown, Breadcrumb, theme } from 'antd';
 import {
@@ -6,7 +6,7 @@ import {
   SafetyOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined,
   UserOutlined, LogoutOutlined, RobotOutlined,
-  DollarOutlined, HomeOutlined, PieChartOutlined,
+  DollarOutlined, HomeOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../store/authStore';
 
@@ -18,16 +18,17 @@ const SIDER_C = 80;
 const HEADER_H = 64;
 
 export default function AppLayout() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+  const [isCompact, setIsCompact] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const { token: t } = theme.useToken();
-  const sw = collapsed ? SIDER_C : SIDER_W;
+  const collapsedWidth = isCompact ? 64 : SIDER_C;
+  const sw = collapsed ? collapsedWidth : SIDER_W;
 
   const routes = [
     { key: '/', icon: <HomeOutlined />, label: '首页' },
-    { key: '/dashboard', icon: <PieChartOutlined />, label: '仪表盘' },
     { key: '/entities', icon: <TeamOutlined />, label: '主体管理' },
     { key: '/warnings', icon: <DashboardOutlined />, label: '资源预警' },
     { key: '/consumption', icon: <BarChartOutlined />, label: '消耗监控' },
@@ -39,13 +40,24 @@ export default function AppLayout() {
   routes.forEach(r => { breadcrumbMap[r.key] = { label: r.label, icon: r.icon }; });
   const pageInfo = breadcrumbMap[location.pathname] || { label: '页面', icon: null };
 
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 768px)');
+    const handleChange = (event: MediaQueryListEvent | MediaQueryList) => {
+      setIsCompact(event.matches);
+      if (event.matches) setCollapsed(true);
+    };
+    handleChange(media);
+    media.addEventListener('change', handleChange);
+    return () => media.removeEventListener('change', handleChange);
+  }, []);
+
   return (
     <div style={{ minHeight: '100vh', background: '#f5f5f5' }}>
-      <Sider trigger={null} collapsible collapsed={collapsed} theme="dark" width={SIDER_W} collapsedWidth={SIDER_C}
+      <Sider trigger={null} collapsible collapsed={collapsed} theme="dark" width={SIDER_W} collapsedWidth={collapsedWidth}
         style={{ overflow: 'auto', height: '100vh', position: 'fixed', left: 0, top: 0, bottom: 0, zIndex: 100 }}>
         <div style={{ height: HEADER_H, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 16px' }}>
           {collapsed ? (
-            <img src="/logo-icon.png" alt="Logo" style={{ width: 42, height: 42, objectFit: 'contain', filter: LOGO_FILTER }} />
+            <img src="/logo-icon.png" alt="Logo" style={{ width: isCompact ? 34 : 42, height: isCompact ? 34 : 42, objectFit: 'contain', filter: LOGO_FILTER }} />
           ) : (
             <img src="/logo-full.png" alt="开开华彩" style={{ width: 180, height: 44, objectFit: 'contain', filter: LOGO_FILTER }} />
           )}
@@ -64,10 +76,10 @@ export default function AppLayout() {
           <Breadcrumb items={[{ title: '首页' }, { title: <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>{pageInfo.icon}{pageInfo.label}</span> }]} />
         </div>
         <Dropdown menu={{ items: [{ key: 'user', icon: <UserOutlined />, label: user?.name || '用户' }, { type: 'divider' }, { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', danger: true }], onClick: ({ key }) => { if (key === 'logout') { logout(); navigate('/login'); } } }} placement="bottomRight">
-          <Button type="text" icon={<UserOutlined />}>{user?.name}</Button>
+          <Button className="app-user-button" type="text" icon={<UserOutlined />}>{user?.name}</Button>
         </Dropdown>
       </header>
-      <main style={{ marginLeft: sw, padding: `${HEADER_H + 24}px 24px 24px`, minHeight: '100vh', transition: 'margin-left 0.2s', boxSizing: 'border-box' }}>
+      <main className="app-main" style={{ marginLeft: sw, width: `calc(100% - ${sw}px)`, padding: `${HEADER_H + 24}px 24px 24px`, minHeight: '100vh', transition: 'margin-left 0.2s, width 0.2s', boxSizing: 'border-box' }}>
         <div style={{ background: t.colorBgContainer, borderRadius: t.borderRadiusLG, padding: 24, minHeight: `calc(100vh - ${HEADER_H}px - 72px)` }}>
           <Outlet />
         </div>
