@@ -5,7 +5,6 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   ClockCircleOutlined,
-  DeleteOutlined,
   EyeOutlined,
   ExportOutlined,
   FilterOutlined,
@@ -181,6 +180,52 @@ export default function UserMigration() {
     ];
   }, [records]);
 
+  const transferTimesStats = useMemo(() => {
+    const now = dayjs();
+    const yesterdayStart = now.subtract(1, 'day').startOf('day').valueOf();
+    const yesterdayEnd = now.subtract(1, 'day').endOf('day').valueOf();
+    const weekStart = now.subtract(6, 'day').startOf('day').valueOf();
+    const monthStart = now.subtract(29, 'day').startOf('day').valueOf();
+    const todayEnd = now.endOf('day').valueOf();
+    const transferredRecords = records.filter((record) => getTransferCount(record) > 0);
+
+    const countInRange = (start: number, end: number) => transferredRecords.filter((record) => {
+      const processedAt = getProcessedTimestamp(record);
+      return processedAt >= start && processedAt <= end;
+    }).length;
+
+    return [
+      { label: '上一日迁移人次', color: 'red', count: countInRange(yesterdayStart, yesterdayEnd) },
+      { label: '近一周迁移人次', color: 'orange', count: countInRange(weekStart, todayEnd) },
+      { label: '近一月迁移人次', color: 'gold', count: countInRange(monthStart, todayEnd) },
+      { label: '累计迁移人次', color: 'blue', count: transferredRecords.length },
+    ];
+  }, [records]);
+
+  const renderStatSection = (
+    title: string,
+    stats: Array<{ label: string; color: string; count: number }>,
+    unit: string,
+    tone: 'danger' | 'warning' | 'primary',
+  ) => (
+    <section className="migration-stat-section" data-tone={tone}>
+      <div className="migration-stat-section-header">
+        <div className="migration-stat-section-title">{title}</div>
+      </div>
+      <div className="migration-category-grid">
+        {stats.map((item) => (
+          <div key={item.label} className="migration-category-item" data-tone={item.color}>
+            <span className="migration-category-label">{item.label}</span>
+            <div className="migration-category-value">
+              <strong>{item.count.toLocaleString()}</strong>
+              <span>{unit}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+
 
   const detailRecord = useMemo(
     () => records.find((record) => record.id === detailRecordId) || null,
@@ -253,20 +298,6 @@ export default function UserMigration() {
 
   const handleManualFieldChange = (fieldName: keyof DetailDraft, value: string | undefined) => {
     setDetailDraft((current) => ({ ...current, [fieldName]: value }));
-  };
-
-  const handleDelete = (record: MigrationRecord) => {
-    Modal.confirm({
-      title: '确认删除',
-      content: `确定删除「${record.name}」的迁移记录吗？`,
-      okText: '删除',
-      okType: 'danger',
-      cancelText: '取消',
-      onOk: () => {
-        persist(records.filter((item) => item.id !== record.id));
-        message.success('迁移记录已删除');
-      },
-    });
   };
 
   const handleResetFilters = () => {
@@ -442,29 +473,18 @@ export default function UserMigration() {
       ),
     },
     { title: '迁移类型', key: 'migrationType', width: 170, ellipsis: true, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['迁移类型']) },
-    { title: '迁移客户数量', key: 'customerCount', width: 120, sorter: (a: MigrationRecord, b: MigrationRecord) => Number(getMigrationField(a, ['迁移客户数量'], '0')) - Number(getMigrationField(b, ['迁移客户数量'], '0')), render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['迁移客户数量']) },
     { title: '转量数量', key: 'transferCount', width: 100, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['转量数量']) },
     { title: '完整标签', key: 'fullTag', width: 180, ellipsis: true, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['迁移用户完整标签']) },
-    { title: '迁移客户原因', key: 'reason', width: 220, ellipsis: true, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['迁移客户原因']) },
     { title: '定性', key: 'qualitative', width: 90, render: (_: unknown, record: MigrationRecord) => <Tag color={getMigrationField(record, ['定性']) === '封号' ? 'red' : 'green'}>{getMigrationField(record, ['定性'])}</Tag> },
-    { title: 'leader是否同意', key: 'leaderApproved', width: 120, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['leader是否同意']) },
-    { title: '处理人', key: 'handler', width: 100, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['处理人']) },
     { title: '登记时间', key: 'registeredAt', width: 120, render: (_: unknown, record: MigrationRecord) => formatMigrationDate(getMigrationField(record, ['登记时间'], record.createdAt)) },
-    {
-      title: '操作状态',
-      key: 'operationStatus',
-      width: 110,
-      render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['操作状态'], PUSH_BUTTON_TEXT),
-    },
     {
       title: '操作',
       key: 'action',
-      width: 150,
+      width: 100,
       fixed: 'right' as const,
       render: (_: unknown, record: MigrationRecord) => (
         <Space>
           <Button size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>查看信息</Button>
-          <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
         </Space>
       ),
     },
@@ -586,30 +606,9 @@ export default function UserMigration() {
 
       <Card size="small" title="统计" style={{ marginBottom: 16 }}>
         <div className="migration-stat-sections">
-          <section className="migration-stat-section">
-            <div className="migration-stat-section-title">封号数据</div>
-            <div className="migration-category-grid">
-              {blockedStats.map((item) => (
-                <div key={item.label} className="migration-category-item">
-                  <Tag color={item.color}>{item.label}</Tag>
-                  <strong>{item.count}</strong>
-                  <span>条</span>
-                </div>
-              ))}
-            </div>
-          </section>
-          <section className="migration-stat-section">
-            <div className="migration-stat-section-title">转量数据</div>
-            <div className="migration-category-grid">
-              {transferStats.map((item) => (
-                <div key={item.label} className="migration-category-item">
-                  <Tag color={item.color}>{item.label}</Tag>
-                  <strong>{item.count}</strong>
-                  <span>人</span>
-                </div>
-              ))}
-            </div>
-          </section>
+          {renderStatSection('封号数据', blockedStats, '条', 'danger')}
+          {renderStatSection('转量数据', transferStats, '人', 'warning')}
+          {renderStatSection('人次', transferTimesStats, '人次', 'primary')}
         </div>
       </Card>
 
@@ -618,7 +617,7 @@ export default function UserMigration() {
         columns={columns}
         rowKey="id"
         size="middle"
-        scroll={{ x: 2320 }}
+        scroll={{ x: 1770 }}
         pagination={{ pageSize: 12, showTotal: (total: number) => `共 ${total} 条迁移记录` }}
       />
 

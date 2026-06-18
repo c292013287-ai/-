@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Card, DatePicker, Empty, Progress, Row, Col, Spin, Table, Tag, Typography } from 'antd';
-import { BarChartOutlined, CalendarOutlined, DollarOutlined, RiseOutlined, TeamOutlined } from '@ant-design/icons';
+import { AlertOutlined, BarChartOutlined, CalendarOutlined, DollarOutlined, RiseOutlined, TeamOutlined, UserSwitchOutlined } from '@ant-design/icons';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from 'recharts';
 import dayjs from 'dayjs';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 import { getEntities, type WecomEntity } from '../api/entities';
 import { getRecharges, type RechargeRecord } from '../api/recharges';
+import { getMigrationField, loadMigrationRecords, type MigrationRecord } from './userMigrationData';
 
 const { Text } = Typography;
 
@@ -33,6 +34,32 @@ function money(value: number) {
   return `¥${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
+function parseMigrationTimestamp(value: string) {
+  if (!value || value === '-') return 0;
+
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue) && numericValue > 0) {
+    return numericValue < 1_000_000_000_000 ? numericValue * 1000 : numericValue;
+  }
+
+  const parsed = dayjs(value);
+  return parsed.isValid() ? parsed.valueOf() : 0;
+}
+
+function getMigrationRegisteredTimestamp(record: MigrationRecord) {
+  return parseMigrationTimestamp(getMigrationField(record, ['登记时间'], record.createdAt));
+}
+
+function getMigrationProcessedTimestamp(record: MigrationRecord) {
+  return parseMigrationTimestamp(getMigrationField(record, ['处理时间'], ''));
+}
+
+function getTransferCount(record: MigrationRecord) {
+  const value = getMigrationField(record, ['转量数量'], '0').replace(/,/g, '');
+  const count = Number(value);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
 interface AiAssistantProps {
   embedded?: boolean;
 }
@@ -42,9 +69,11 @@ export default function AiAssistant({ embedded = false }: AiAssistantProps) {
   const [selectedMonth, setSelectedMonth] = useState(dayjs());
   const [entities, setEntities] = useState<WecomEntity[]>([]);
   const [recharges, setRecharges] = useState<RechargeRecord[]>([]);
+  const [migrationRecords, setMigrationRecords] = useState<MigrationRecord[]>(() => loadMigrationRecords());
 
   const fetchData = () => {
     setLoading(true);
+    setMigrationRecords(loadMigrationRecords());
     const range = monthRange(selectedMonth);
     Promise.all([
       getEntities(),
@@ -107,6 +136,27 @@ export default function AiAssistant({ embedded = false }: AiAssistantProps) {
   const totalRecords = reportRows.reduce((sum, row) => sum + row.recordCount, 0);
   const avgFee = activeRows.length ? totalFee / activeRows.length : 0;
   const topRow = activeRows[0];
+  const migrationSummary = useMemo(() => {
+    const monthStart = selectedMonth.startOf('month').valueOf();
+    const monthEnd = selectedMonth.endOf('month').valueOf();
+    const recordsInMonth = migrationRecords.filter((record) => {
+      const registeredAt = getMigrationRegisteredTimestamp(record);
+      return registeredAt >= monthStart && registeredAt <= monthEnd;
+    });
+    const blockedRecordsInMonth = recordsInMonth.filter((record) => getMigrationField(record, ['定性']).trim() === '封号');
+    const transferredRecordsInMonth = migrationRecords.filter((record) => {
+      const processedAt = getMigrationProcessedTimestamp(record);
+      return processedAt >= monthStart && processedAt <= monthEnd && getTransferCount(record) > 0;
+    });
+    const transferPeople = transferredRecordsInMonth.reduce((sum, record) => sum + getTransferCount(record), 0);
+
+    return {
+      submitted: recordsInMonth.length,
+      blocked: blockedRecordsInMonth.length,
+      transferPeople,
+      transferTimes: transferredRecordsInMonth.length,
+    };
+  }, [migrationRecords, selectedMonth]);
   const chartData = reportRows.slice(0, 10).map((row) => ({
     name: row.name.length > 8 ? `${row.name.slice(0, 8)}...` : row.name,
     充值费用: Number(row.rechargeFee.toFixed(2)),
@@ -184,7 +234,7 @@ export default function AiAssistant({ embedded = false }: AiAssistantProps) {
     <div style={{ maxWidth: 1120, margin: '0 auto', paddingTop: embedded ? 8 : 0 }}>
       <PageHeader
         title="BI分析报告"
-        desc="按月份统计每一个主体的充值费用、充值数量与费用占比"
+        desc="按月份统计主体充值表现，并补充用户迁移与转量数据"
         extra={
           <DatePicker
             picker="month"
@@ -202,6 +252,15 @@ export default function AiAssistant({ embedded = false }: AiAssistantProps) {
         <StatCard title="充值数量" value={totalAmount} suffix="个" gradient="green" color="#52c41a" prefix={<RiseOutlined style={{ color: '#52c41a' }} />} />
         <StatCard title="充值笔数" value={totalRecords} suffix="笔" gradient="red" color="#cf1322" />
       </div>
+
+      <Card size="small" title="用户迁移概况" style={{ marginBottom: 24 }}>
+        <div className="summary-grid bi-migration-summary-grid" style={{ marginBottom: 0 }}>
+          <StatCard title={`${selectedMonth.format('MM月')}迁移提交`} value={migrationSummary.submitted} suffix="条" gradient="blue" color="#1677ff" prefix={<UserSwitchOutlined style={{ color: '#1677ff' }} />} />
+          <StatCard title="封号数据" value={migrationSummary.blocked} suffix="条" gradient="red" color="#cf1322" prefix={<AlertOutlined style={{ color: '#cf1322' }} />} />
+          <StatCard title="转量用户数量" value={migrationSummary.transferPeople} suffix="人" gradient="green" color="#52c41a" prefix={<RiseOutlined style={{ color: '#52c41a' }} />} />
+          <StatCard title="迁移人次" value={migrationSummary.transferTimes} suffix="人次" gradient="orange" color="#ed6a1c" />
+        </div>
+      </Card>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} lg={15}>
@@ -246,6 +305,13 @@ export default function AiAssistant({ embedded = false }: AiAssistantProps) {
               <div>
                 <Text type="secondary">未产生充值费用主体</Text>
                 <div style={{ fontSize: 18, fontWeight: 700, marginTop: 4 }}>{Math.max(reportRows.length - activeRows.length, 0)} 个</div>
+              </div>
+              <div>
+                <Text type="secondary">用户迁移转量</Text>
+                <div style={{ fontSize: 18, fontWeight: 700, color: '#1677ff', marginTop: 4 }}>{migrationSummary.transferPeople.toLocaleString()} 人</div>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {migrationSummary.transferTimes.toLocaleString()} 人次 · 封号 {migrationSummary.blocked.toLocaleString()} 条
+                </Text>
               </div>
             </div>
           </Card>
