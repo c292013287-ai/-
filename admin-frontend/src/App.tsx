@@ -9,8 +9,9 @@ import Dashboard from './pages/Dashboard';
 import EntityManage from './pages/EntityManage';
 import ConsumptionMonitor from './pages/ConsumptionMonitor';
 import RechargeRecord from './pages/RechargeRecord';
-import AiAssistant from './pages/AiAssistant';
 import RiskAssessment from './pages/RiskAssessment';
+import UserMigration from './pages/UserMigration';
+import UserMigrationCollect from './pages/UserMigrationCollect';
 
 export default function App() {
   return (
@@ -25,7 +26,8 @@ export default function App() {
               <Route path="/entities" element={<EntityManage />} />
               <Route path="/consumption" element={<ConsumptionMonitor />} />
               <Route path="/recharges" element={<RechargeRecord />} />
-              <Route path="/ai" element={<AiAssistant />} />
+              <Route path="/migration" element={<UserMigration />} />
+              <Route path="/migration/collect" element={<UserMigrationCollect />} />
               <Route path="/risk" element={<RiskAssessment />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

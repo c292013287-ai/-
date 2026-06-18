@@ -7,6 +7,7 @@ import consumptionRoutes from './routes/consumption';
 import dashboardRoutes from './routes/dashboard';
 import rechargeRoutes from './routes/recharges';
 import announcementRoutes from './routes/announcements';
+import migrationRoutes from './routes/migration';
 import { startScheduler } from './services/scheduler';
 
 dotenv.config();
@@ -39,6 +40,7 @@ app.use('/api/consumption', consumptionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/recharges', rechargeRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/migration', migrationRoutes);
 
 // 健康检查
 app.get('/api/health', (_req, res) => {

@@ -207,6 +207,39 @@ body {
   min-width: 0;
 }
 
+.migration-category-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.migration-category-item {
+  min-height: 68px;
+  padding: 14px 16px;
+  border: 1px solid #eef0f3;
+  border-radius: 8px;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.migration-category-item strong {
+  font-size: 24px;
+  line-height: 1;
+  color: #1f2329;
+}
+
+.migration-category-item span {
+  color: #646a73;
+}
+
+.migration-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
 .app-user-button {
   max-width: 160px;
 }
@@ -281,5 +314,10 @@ body {
 
   .home-metric-card .ant-card-body {
     min-height: auto;
+  }
+
+  .migration-category-grid,
+  .migration-form-grid {
+    grid-template-columns: 1fr;
   }
 }

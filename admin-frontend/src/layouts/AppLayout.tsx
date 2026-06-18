@@ -5,7 +5,7 @@ import {
   DashboardOutlined, TeamOutlined, BarChartOutlined,
   SafetyOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined,
-  UserOutlined, LogoutOutlined, RobotOutlined,
+  UserOutlined, LogoutOutlined, UserSwitchOutlined,
   DollarOutlined, HomeOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../store/authStore';
@@ -33,12 +33,14 @@ export default function AppLayout() {
     { key: '/warnings', icon: <DashboardOutlined />, label: '资源预警' },
     { key: '/consumption', icon: <BarChartOutlined />, label: '消耗监控' },
     { key: '/recharges', icon: <DollarOutlined />, label: '充值记录' },
-    { key: '/ai', icon: <RobotOutlined />, label: 'BI分析报告' },
+    { key: '/migration', icon: <UserSwitchOutlined />, label: '用户迁移' },
     { key: '/risk', icon: <SafetyOutlined />, label: '主体风控' },
   ];
   const breadcrumbMap: Record<string, { label: string; icon: React.ReactNode }> = {};
   routes.forEach(r => { breadcrumbMap[r.key] = { label: r.label, icon: r.icon }; });
+  breadcrumbMap['/migration/collect'] = { label: '信息采集', icon: <UserSwitchOutlined /> };
   const pageInfo = breadcrumbMap[location.pathname] || { label: '页面', icon: null };
+  const selectedMenuKey = location.pathname.startsWith('/migration') ? '/migration' : location.pathname;
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 768px)');
@@ -62,7 +64,7 @@ export default function AppLayout() {
             <img src="/logo-full.png" alt="开开华彩" style={{ width: 180, height: 44, objectFit: 'contain', filter: LOGO_FILTER }} />
           )}
         </div>
-        <Menu theme="dark" mode="inline" selectedKeys={[location.pathname]}
+        <Menu theme="dark" mode="inline" selectedKeys={[selectedMenuKey]}
           items={routes.map(r => ({ key: r.key, icon: r.icon, label: r.label }))}
           onClick={({ key }) => navigate(key)} style={{ borderInlineEnd: 'none' }} />
       </Sider>

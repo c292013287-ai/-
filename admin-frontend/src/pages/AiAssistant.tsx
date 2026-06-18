@@ -33,7 +33,11 @@ function money(value: number) {
   return `¥${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
 
-export default function AiAssistant() {
+interface AiAssistantProps {
+  embedded?: boolean;
+}
+
+export default function AiAssistant({ embedded = false }: AiAssistantProps) {
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(dayjs());
   const [entities, setEntities] = useState<WecomEntity[]>([]);
@@ -47,8 +51,12 @@ export default function AiAssistant() {
       getRecharges({ ...range, pageSize: 99999 }),
     ])
       .then(([entityRes, rechargeRes]) => {
-        setEntities(entityRes);
-        setRecharges(rechargeRes.data);
+        setEntities(Array.isArray(entityRes) ? entityRes : []);
+        setRecharges(Array.isArray(rechargeRes?.data) ? rechargeRes.data : []);
+      })
+      .catch(() => {
+        setEntities([]);
+        setRecharges([]);
       })
       .finally(() => setLoading(false));
   };
@@ -173,7 +181,7 @@ export default function AiAssistant() {
   }
 
   return (
-    <div style={{ maxWidth: 1120, margin: '0 auto' }}>
+    <div style={{ maxWidth: 1120, margin: '0 auto', paddingTop: embedded ? 8 : 0 }}>
       <PageHeader
         title="BI分析报告"
         desc="按月份统计每一个主体的充值费用、充值数量与费用占比"

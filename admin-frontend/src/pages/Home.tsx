@@ -5,6 +5,7 @@ import { DollarOutlined, ThunderboltOutlined, AlertOutlined, SoundOutlined, Plus
 import { getBudgetList } from '../api/dashboard';
 import { getRecharges } from '../api/recharges';
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, type Announcement } from '../api/announcements';
+import AiAssistant from './AiAssistant';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -29,10 +30,11 @@ export default function Home() {
     const { startDate, endDate } = currentMonthRange();
     Promise.all([getBudgetList(), getRecharges({ startDate, endDate, pageSize: 1 }), getAnnouncements()])
       .then(([budgetRes, rechargeRes, announcements]) => {
-        setTodayConsumption(budgetRes.summary.todayConsumption);
+        const rows = Array.isArray(budgetRes?.rows) ? budgetRes.rows : [];
+        setTodayConsumption(budgetRes?.summary?.todayConsumption || 0);
         setMonthlyRecharge(rechargeRes.monthlyTotal || 0);
-        setWarningCount(budgetRes.rows.filter(r => r.countdownDays >= 0 && r.countdownDays < 5).length);
-        setNotices(announcements);
+        setWarningCount(rows.filter(r => r.countdownDays >= 0 && r.countdownDays < 5).length);
+        setNotices(Array.isArray(announcements) ? announcements : []);
       }).catch(console.error).finally(() => setLoading(false));
   };
 
@@ -59,7 +61,7 @@ export default function Home() {
   ];
 
   return (
-    <div style={{ maxWidth: 980, margin: '0 auto' }}>
+    <div style={{ maxWidth: 1120, margin: '0 auto' }}>
       <div style={{ marginBottom: 40 }}>
         <Title level={3} style={{ marginBottom: 4, fontWeight: 600 }}>{getGreeting()}</Title>
         <Text type="secondary" style={{ fontSize: 14 }}>欢迎回来，以下是系统运行概况</Text>
@@ -110,6 +112,10 @@ export default function Home() {
           <Form.Item name="tag" label="标签" initialValue="系统"><Select options={[{ label: '系统', value: '系统' }, { label: '更新', value: '更新' }, { label: '说明', value: '说明' }, { label: '重要', value: '重要' }]} /></Form.Item>
         </Form>
       </Modal>
+
+      <div style={{ marginTop: 48 }}>
+        <AiAssistant embedded />
+      </div>
     </div>
   );
 }
