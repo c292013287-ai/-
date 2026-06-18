@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, DatePicker, Descriptions, InputNumber, Modal, Select, Space, Table, Tag, message } from 'antd';
 import {
@@ -74,6 +74,7 @@ export default function UserMigration() {
   });
   const [pushingId, setPushingId] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const autoSyncingRef = useRef(false);
 
   const filteredRecords = useMemo(() => records
     .filter((record) => {
@@ -133,6 +134,60 @@ export default function UserMigration() {
     setRecords(nextRecords);
     saveMigrationRecords(nextRecords);
   };
+
+  const syncFeishuRecords = useCallback(async (manual = false) => {
+    if (autoSyncingRef.current) return;
+
+    const config = loadFeishuFormConfig();
+    if (!config.appToken || !config.tableId) {
+      if (manual) {
+        message.warning('请先在信息采集页配置飞书 App Token 和 Table ID');
+        navigate('/migration/collect');
+      }
+      return;
+    }
+
+    autoSyncingRef.current = true;
+    if (manual) setSyncing(true);
+
+    try {
+      const feishuRows = await getFeishuMigrationRecords({
+        appToken: config.appToken,
+        tableId: config.tableId,
+        viewId: config.viewId || undefined,
+      });
+      const incomingRecords = feishuRows.map(migrationRecordFromFeishu);
+      const currentRecords = loadMigrationRecords();
+      const currentSourceIds = new Set(currentRecords.map((record) => record.sourceRecordId).filter(Boolean));
+      const addedCount = incomingRecords.filter((record) => record.sourceRecordId && !currentSourceIds.has(record.sourceRecordId)).length;
+      const nextRecords = mergeMigrationRecords(currentRecords, incomingRecords);
+      saveMigrationRecords(nextRecords);
+      setRecords(nextRecords);
+
+      if (manual) {
+        message.success(`已保存并同步 ${incomingRecords.length} 条飞书提交信息`);
+      } else if (addedCount > 0) {
+        message.success(`已自动同步 ${addedCount} 条新增迁移信息`);
+      }
+    } catch (error) {
+      const errorMessage = error && typeof error === 'object' && 'response' in error
+        ? (error as { response?: { data?: { error?: string } } }).response?.data?.error
+        : undefined;
+      if (manual) message.error(errorMessage || '保存并同步飞书提交信息失败');
+    } finally {
+      autoSyncingRef.current = false;
+      if (manual) setSyncing(false);
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    void syncFeishuRecords(false);
+    const timer = window.setInterval(() => {
+      void syncFeishuRecords(false);
+    }, 10_000);
+
+    return () => window.clearInterval(timer);
+  }, [syncFeishuRecords]);
 
   const handleManualFieldChange = (fieldName: keyof DetailDraft, value: string | undefined) => {
     setDetailDraft((current) => ({ ...current, [fieldName]: value }));
@@ -243,32 +298,7 @@ export default function UserMigration() {
   };
 
   const handleSaveAndSync = async () => {
-    const config = loadFeishuFormConfig();
-    if (!config.appToken || !config.tableId) {
-      message.warning('请先在信息采集页配置飞书 App Token 和 Table ID');
-      navigate('/migration/collect');
-      return;
-    }
-
-    setSyncing(true);
-    try {
-      const feishuRows = await getFeishuMigrationRecords({
-        appToken: config.appToken,
-        tableId: config.tableId,
-        viewId: config.viewId || undefined,
-      });
-      const incomingRecords = feishuRows.map(migrationRecordFromFeishu);
-      const nextRecords = mergeMigrationRecords(records, incomingRecords);
-      persist(nextRecords);
-      message.success(`已保存并同步 ${incomingRecords.length} 条飞书提交信息`);
-    } catch (error) {
-      const errorMessage = error && typeof error === 'object' && 'response' in error
-        ? (error as { response?: { data?: { error?: string } } }).response?.data?.error
-        : undefined;
-      message.error(errorMessage || '保存并同步飞书提交信息失败');
-    } finally {
-      setSyncing(false);
-    }
+    await syncFeishuRecords(true);
   };
 
   const handleExport = () => {
