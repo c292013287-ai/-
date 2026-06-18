@@ -196,8 +196,8 @@ body {
 .migration-filter-panel {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: start;
+  gap: 12px;
+  align-items: end;
   padding: 14px 16px;
   background: #fafafa;
   border: 1px solid #f0f0f0;
@@ -216,8 +216,17 @@ body {
 
 .migration-filter-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(142px, 1fr));
-  gap: 12px;
+  grid-template-columns:
+    minmax(92px, 0.9fr)
+    minmax(92px, 0.9fr)
+    minmax(104px, 1fr)
+    minmax(170px, 1.55fr)
+    minmax(96px, 1fr)
+    minmax(118px, 1.05fr)
+    minmax(92px, 0.9fr)
+    minmax(116px, 1.05fr)
+    minmax(104px, 1fr);
+  gap: 10px;
   min-width: 0;
 }
 
@@ -243,8 +252,12 @@ body {
   display: inline-flex;
   align-items: end;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
   min-height: 54px;
+}
+
+.migration-filter-actions .ant-btn {
+  padding-inline: 12px;
 }
 
 .app-main > div {
@@ -263,6 +276,22 @@ body {
 
 .chart-card .recharts-responsive-container {
   min-width: 0;
+}
+
+.migration-stat-sections {
+  display: grid;
+  gap: 16px;
+}
+
+.migration-stat-section {
+  display: grid;
+  gap: 10px;
+}
+
+.migration-stat-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2329;
 }
 
 .migration-category-grid {
@@ -370,6 +399,10 @@ body {
     display: none;
   }
 
+  .migration-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
   .migration-filter-panel {
     grid-template-columns: 1fr;
   }
@@ -398,5 +431,11 @@ body {
   .migration-category-grid,
   .migration-form-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1280px) {
+  .migration-filter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

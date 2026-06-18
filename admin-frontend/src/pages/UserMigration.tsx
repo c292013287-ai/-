@@ -19,8 +19,6 @@ import { getFeishuMigrationRecords, updateFeishuMigrationRecord } from '../api/m
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 import {
-  categoryColor,
-  categoryOptions,
   formatMigrationDate,
   getMigrationField,
   loadFeishuFormConfig,
@@ -54,6 +52,29 @@ function getRegisteredTimestamp(record: MigrationRecord) {
 
   const parsed = dayjs(value);
   return parsed.isValid() ? parsed.valueOf() : 0;
+}
+
+function getProcessedTimestamp(record: MigrationRecord) {
+  const value = getMigrationField(record, ['处理时间'], '');
+  if (!value || value === '-') return 0;
+
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue) && numericValue > 0) {
+    return numericValue < 1_000_000_000_000 ? numericValue * 1000 : numericValue;
+  }
+
+  const parsed = dayjs(value);
+  return parsed.isValid() ? parsed.valueOf() : 0;
+}
+
+function getTransferCount(record: MigrationRecord) {
+  const value = getMigrationField(record, ['转量数量'], '0').replace(/,/g, '');
+  const count = Number(value);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
+function isBlockedRecord(record: MigrationRecord) {
+  return getMigrationField(record, ['定性']).trim() === '封号';
 }
 
 export default function UserMigration() {
@@ -115,10 +136,51 @@ export default function UserMigration() {
   const migratingCount = records.filter((record) => record.status === '迁移中').length;
   const completionRate = records.length ? Math.round((completedCount / records.length) * 100) : 0;
 
-  const categoryStats = categoryOptions.map((category) => ({
-    category,
-    count: records.filter((record) => record.category === category).length,
-  }));
+  const blockedStats = useMemo(() => {
+    const now = dayjs();
+    const yesterdayStart = now.subtract(1, 'day').startOf('day').valueOf();
+    const yesterdayEnd = now.subtract(1, 'day').endOf('day').valueOf();
+    const weekStart = now.subtract(6, 'day').startOf('day').valueOf();
+    const monthStart = now.subtract(29, 'day').startOf('day').valueOf();
+    const todayEnd = now.endOf('day').valueOf();
+    const blockedRecords = records.filter(isBlockedRecord);
+
+    const countInRange = (start: number, end: number) => blockedRecords.filter((record) => {
+      const registeredAt = getRegisteredTimestamp(record);
+      return registeredAt >= start && registeredAt <= end;
+    }).length;
+
+    return [
+      { label: '上一日封号数据', color: 'red', count: countInRange(yesterdayStart, yesterdayEnd) },
+      { label: '近一周封号数据', color: 'orange', count: countInRange(weekStart, todayEnd) },
+      { label: '近一月封号数据', color: 'gold', count: countInRange(monthStart, todayEnd) },
+      { label: '累计封号数据', color: 'blue', count: blockedRecords.length },
+    ];
+  }, [records]);
+
+  const transferStats = useMemo(() => {
+    const now = dayjs();
+    const yesterdayStart = now.subtract(1, 'day').startOf('day').valueOf();
+    const yesterdayEnd = now.subtract(1, 'day').endOf('day').valueOf();
+    const weekStart = now.subtract(6, 'day').startOf('day').valueOf();
+    const monthStart = now.subtract(29, 'day').startOf('day').valueOf();
+    const todayEnd = now.endOf('day').valueOf();
+
+    const sumInRange = (start: number, end: number) => records.reduce((total, record) => {
+      const processedAt = getProcessedTimestamp(record);
+      if (processedAt < start || processedAt > end) return total;
+      return total + getTransferCount(record);
+    }, 0);
+    const totalTransferCount = records.reduce((total, record) => total + getTransferCount(record), 0);
+
+    return [
+      { label: '上一日迁移用户数量', color: 'red', count: sumInRange(yesterdayStart, yesterdayEnd) },
+      { label: '近一周迁移用户数量', color: 'orange', count: sumInRange(weekStart, todayEnd) },
+      { label: '近一月迁移用户数量', color: 'gold', count: sumInRange(monthStart, todayEnd) },
+      { label: '累计迁移用户数量', color: 'blue', count: totalTransferCount },
+    ];
+  }, [records]);
+
 
   const detailRecord = useMemo(
     () => records.find((record) => record.id === detailRecordId) || null,
@@ -522,15 +584,32 @@ export default function UserMigration() {
         </div>
       </Card>
 
-      <Card size="small" title="分类统计" style={{ marginBottom: 16 }}>
-        <div className="migration-category-grid">
-          {categoryStats.map((item) => (
-            <div key={item.category} className="migration-category-item">
-              <Tag color={categoryColor[item.category]}>{item.category}</Tag>
-              <strong>{item.count}</strong>
-              <span>人</span>
+      <Card size="small" title="统计" style={{ marginBottom: 16 }}>
+        <div className="migration-stat-sections">
+          <section className="migration-stat-section">
+            <div className="migration-stat-section-title">封号数据</div>
+            <div className="migration-category-grid">
+              {blockedStats.map((item) => (
+                <div key={item.label} className="migration-category-item">
+                  <Tag color={item.color}>{item.label}</Tag>
+                  <strong>{item.count}</strong>
+                  <span>条</span>
+                </div>
+              ))}
             </div>
-          ))}
+          </section>
+          <section className="migration-stat-section">
+            <div className="migration-stat-section-title">转量数据</div>
+            <div className="migration-category-grid">
+              {transferStats.map((item) => (
+                <div key={item.label} className="migration-category-item">
+                  <Tag color={item.color}>{item.label}</Tag>
+                  <strong>{item.count}</strong>
+                  <span>人</span>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
       </Card>
 
