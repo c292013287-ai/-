@@ -45,6 +45,17 @@ function canPushDraft(draft: DetailDraft) {
   return /^\d+$/.test(draft.transferCount) && !!draft.handler && dayjs(draft.processedAt).isValid();
 }
 
+function getRegisteredTimestamp(record: MigrationRecord) {
+  const value = getMigrationField(record, ['登记时间'], record.createdAt);
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue) && numericValue > 0) {
+    return numericValue < 1_000_000_000_000 ? numericValue * 1000 : numericValue;
+  }
+
+  const parsed = dayjs(value);
+  return parsed.isValid() ? parsed.valueOf() : 0;
+}
+
 export default function UserMigration() {
   const navigate = useNavigate();
   const [records, setRecords] = useState<MigrationRecord[]>(() => loadMigrationRecords());
@@ -64,20 +75,22 @@ export default function UserMigration() {
   const [pushingId, setPushingId] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
 
-  const filteredRecords = useMemo(() => records.filter((record) => {
-    const registeredDate = formatMigrationDate(getMigrationField(record, ['登记时间'], record.createdAt));
-    return (
-      (filters.entity === '全部' || getMigrationField(record, ['选择要迁移用户的主体']) === filters.entity)
-      && (filters.sku === '全部' || getMigrationField(record, ['所属SKU']) === filters.sku)
-      && (filters.migrationType === '全部' || getMigrationField(record, ['迁移类型']) === filters.migrationType)
-      && (filters.fullTag === '全部' || getMigrationField(record, ['迁移用户完整标签']) === filters.fullTag)
-      && (filters.qualitative === '全部' || getMigrationField(record, ['定性']) === filters.qualitative)
-      && (filters.leaderApproved === '全部' || getMigrationField(record, ['leader是否同意']) === filters.leaderApproved)
-      && (filters.handler === '全部' || getMigrationField(record, ['处理人']) === filters.handler)
-      && (!filters.registeredDate || registeredDate === filters.registeredDate)
-      && (filters.operationStatus === '全部' || getMigrationField(record, ['操作状态'], PUSH_BUTTON_TEXT) === filters.operationStatus)
-    );
-  }), [records, filters]);
+  const filteredRecords = useMemo(() => records
+    .filter((record) => {
+      const registeredDate = formatMigrationDate(getMigrationField(record, ['登记时间'], record.createdAt));
+      return (
+        (filters.entity === '全部' || getMigrationField(record, ['选择要迁移用户的主体']) === filters.entity)
+        && (filters.sku === '全部' || getMigrationField(record, ['所属SKU']) === filters.sku)
+        && (filters.migrationType === '全部' || getMigrationField(record, ['迁移类型']) === filters.migrationType)
+        && (filters.fullTag === '全部' || getMigrationField(record, ['迁移用户完整标签']) === filters.fullTag)
+        && (filters.qualitative === '全部' || getMigrationField(record, ['定性']) === filters.qualitative)
+        && (filters.leaderApproved === '全部' || getMigrationField(record, ['leader是否同意']) === filters.leaderApproved)
+        && (filters.handler === '全部' || getMigrationField(record, ['处理人']) === filters.handler)
+        && (!filters.registeredDate || registeredDate === filters.registeredDate)
+        && (filters.operationStatus === '全部' || getMigrationField(record, ['操作状态'], PUSH_BUTTON_TEXT) === filters.operationStatus)
+      );
+    })
+    .sort((a, b) => getRegisteredTimestamp(b) - getRegisteredTimestamp(a)), [records, filters]);
 
   const filterOptions = useMemo(() => {
     const buildOptions = (keys: string[]) => {
@@ -99,7 +112,6 @@ export default function UserMigration() {
 
   const completedCount = records.filter((record) => record.status === '已完成').length;
   const migratingCount = records.filter((record) => record.status === '迁移中').length;
-  const highValueCount = records.filter((record) => record.category === '高价值').length;
   const completionRate = records.length ? Math.round((completedCount / records.length) * 100) : 0;
 
   const categoryStats = categoryOptions.map((category) => ({
@@ -379,81 +391,104 @@ export default function UserMigration() {
         )}
       />
 
-      <div className="summary-grid">
+      <div className="summary-grid migration-summary-grid">
         <StatCard title="采集用户" value={records.length} suffix="人" gradient="blue" color="#1677ff" prefix={<UserSwitchOutlined style={{ color: '#1677ff' }} />} />
-        <StatCard title="高价值用户" value={highValueCount} suffix="人" gradient="orange" color="#ed6a1c" />
         <StatCard title="迁移中" value={migratingCount} suffix="人" gradient="red" color="#cf1322" prefix={<ClockCircleOutlined style={{ color: '#cf1322' }} />} />
         <StatCard title="完成率" value={completionRate} suffix="%" gradient="green" color="#52c41a" prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />} />
       </div>
 
       <Card size="small" style={{ marginBottom: 16 }}>
-        <div className="filter-bar" style={{ marginBottom: 0 }}>
-          <FilterOutlined style={{ color: '#ed6a1c' }} />
-          <Select
-            value={filters.entity}
-            placeholder="主体"
-            style={{ width: 150 }}
-            onChange={(value) => setFilters((current) => ({ ...current, entity: value }))}
-            options={filterOptions.entity}
-          />
-          <Select
-            value={filters.sku}
-            placeholder="所属SKU"
-            style={{ width: 150 }}
-            onChange={(value) => setFilters((current) => ({ ...current, sku: value }))}
-            options={filterOptions.sku}
-          />
-          <Select
-            value={filters.migrationType}
-            placeholder="迁移类型"
-            style={{ width: 170 }}
-            onChange={(value) => setFilters((current) => ({ ...current, migrationType: value }))}
-            options={filterOptions.migrationType}
-          />
-          <Select
-            value={filters.fullTag}
-            placeholder="完整标签"
-            style={{ width: 170 }}
-            onChange={(value) => setFilters((current) => ({ ...current, fullTag: value }))}
-            options={filterOptions.fullTag}
-          />
-          <Select
-            value={filters.qualitative}
-            placeholder="定性"
-            style={{ width: 120 }}
-            onChange={(value) => setFilters((current) => ({ ...current, qualitative: value }))}
-            options={filterOptions.qualitative}
-          />
-          <Select
-            value={filters.leaderApproved}
-            placeholder="leader是否同意"
-            style={{ width: 150 }}
-            onChange={(value) => setFilters((current) => ({ ...current, leaderApproved: value }))}
-            options={filterOptions.leaderApproved}
-          />
-          <Select
-            value={filters.handler}
-            placeholder="处理人"
-            style={{ width: 130 }}
-            onChange={(value) => setFilters((current) => ({ ...current, handler: value }))}
-            options={filterOptions.handler}
-          />
-          <DatePicker
-            value={filters.registeredDate ? dayjs(filters.registeredDate) : null}
-            placeholder="登记时间"
-            style={{ width: 140 }}
-            onChange={(value) => setFilters((current) => ({ ...current, registeredDate: value ? value.format('YYYY-MM-DD') : '' }))}
-          />
-          <Select
-            value={filters.operationStatus}
-            placeholder="操作状态"
-            style={{ width: 130 }}
-            onChange={(value) => setFilters((current) => ({ ...current, operationStatus: value }))}
-            options={filterOptions.operationStatus}
-          />
-          <div className="filter-bar-spacer" />
-          <Button icon={<ReloadOutlined />} onClick={handleResetFilters}>重置</Button>
-          <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>
+        <div className="migration-filter-panel">
+          <div className="migration-filter-title">
+            <FilterOutlined style={{ color: '#ed6a1c' }} />
+            <span>筛选条件</span>
+          </div>
+          <div className="migration-filter-grid">
+            <label className="migration-filter-item">
+              <span>主体</span>
+              <Select
+                value={filters.entity}
+                placeholder="全部"
+                onChange={(value) => setFilters((current) => ({ ...current, entity: value }))}
+                options={filterOptions.entity}
+              />
+            </label>
+            <label className="migration-filter-item">
+              <span>所属SKU</span>
+              <Select
+                value={filters.sku}
+                placeholder="全部"
+                onChange={(value) => setFilters((current) => ({ ...current, sku: value }))}
+                options={filterOptions.sku}
+              />
+            </label>
+            <label className="migration-filter-item">
+              <span>迁移类型</span>
+              <Select
+                value={filters.migrationType}
+                placeholder="全部"
+                onChange={(value) => setFilters((current) => ({ ...current, migrationType: value }))}
+                options={filterOptions.migrationType}
+              />
+            </label>
+            <label className="migration-filter-item">
+              <span>完整标签</span>
+              <Select
+                value={filters.fullTag}
+                placeholder="全部"
+                onChange={(value) => setFilters((current) => ({ ...current, fullTag: value }))}
+                options={filterOptions.fullTag}
+              />
+            </label>
+            <label className="migration-filter-item">
+              <span>定性</span>
+              <Select
+                value={filters.qualitative}
+                placeholder="全部"
+                onChange={(value) => setFilters((current) => ({ ...current, qualitative: value }))}
+                options={filterOptions.qualitative}
+              />
+            </label>
+            <label className="migration-filter-item">
+              <span>leader是否同意</span>
+              <Select
+                value={filters.leaderApproved}
+                placeholder="全部"
+                onChange={(value) => setFilters((current) => ({ ...current, leaderApproved: value }))}
+                options={filterOptions.leaderApproved}
+              />
+            </label>
+            <label className="migration-filter-item">
+              <span>处理人</span>
+              <Select
+                value={filters.handler}
+                placeholder="全部"
+                onChange={(value) => setFilters((current) => ({ ...current, handler: value }))}
+                options={filterOptions.handler}
+              />
+            </label>
+            <label className="migration-filter-item">
+              <span>登记时间</span>
+              <DatePicker
+                value={filters.registeredDate ? dayjs(filters.registeredDate) : null}
+                placeholder="选择日期"
+                onChange={(value) => setFilters((current) => ({ ...current, registeredDate: value ? value.format('YYYY-MM-DD') : '' }))}
+              />
+            </label>
+            <label className="migration-filter-item">
+              <span>操作状态</span>
+              <Select
+                value={filters.operationStatus}
+                placeholder="全部"
+                onChange={(value) => setFilters((current) => ({ ...current, operationStatus: value }))}
+                options={filterOptions.operationStatus}
+              />
+            </label>
+          </div>
+          <div className="migration-filter-actions">
+            <Button icon={<ReloadOutlined />} onClick={handleResetFilters}>重置</Button>
+            <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>
+          </div>
         </div>
       </Card>
 

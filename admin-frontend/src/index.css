@@ -164,6 +164,10 @@ body {
   margin-bottom: 22px;
 }
 
+.migration-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .summary-panel {
   min-width: 0;
   min-height: 104px;
@@ -187,6 +191,60 @@ body {
 
 .filter-bar-spacer {
   flex: 1;
+}
+
+.migration-filter-panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px 16px;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+}
+
+.migration-filter-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 54px;
+  color: #4e5969;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.migration-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(142px, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.migration-filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.migration-filter-item > span {
+  color: #646a73;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.migration-filter-item .ant-select,
+.migration-filter-item .ant-picker {
+  width: 100%;
+}
+
+.migration-filter-actions {
+  display: inline-flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 10px;
+  min-height: 54px;
 }
 
 .app-main > div {
@@ -310,6 +368,27 @@ body {
 
   .filter-bar-spacer {
     display: none;
+  }
+
+  .migration-filter-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .migration-filter-title {
+    min-height: auto;
+  }
+
+  .migration-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .migration-filter-actions {
+    min-height: auto;
+    justify-content: stretch;
+  }
+
+  .migration-filter-actions .ant-btn {
+    flex: 1;
   }
 
   .home-metric-card .ant-card-body {
