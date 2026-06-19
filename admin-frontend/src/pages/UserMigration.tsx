@@ -44,6 +44,11 @@ function canPushDraft(draft: DetailDraft) {
   return /^\d+$/.test(draft.transferCount) && !!draft.handler && dayjs(draft.processedAt).isValid();
 }
 
+function hasLocalHandler(record: MigrationRecord) {
+  const handler = record.rawFields?.处理人?.trim();
+  return !!handler && handler !== '-' && handler !== '未分配';
+}
+
 function getRegisteredTimestamp(record: MigrationRecord) {
   const value = getMigrationField(record, ['登记时间'], record.createdAt);
   const numericValue = Number(value);
@@ -272,6 +277,11 @@ export default function UserMigration() {
   };
 
   const handlePushStatus = async (record: MigrationRecord) => {
+    if (hasLocalHandler(record)) {
+      message.warning('该记录已有处理人，无法重复推送');
+      return;
+    }
+
     if (!canPushDraft(detailDraft)) {
       message.warning('请先填写转量数量、处理人和处理时间');
       return;
@@ -594,7 +604,8 @@ export default function UserMigration() {
             <Button
               key="push"
               type="primary"
-              disabled={!canPushDraft(detailDraft)}
+              disabled={hasLocalHandler(detailRecord) || !canPushDraft(detailDraft)}
+              title={hasLocalHandler(detailRecord) ? '该记录已有处理人，无法重复推送' : undefined}
               loading={pushingId === detailRecord.id}
               onClick={() => handlePushStatus(detailRecord)}
             >
