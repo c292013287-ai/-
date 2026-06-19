@@ -123,6 +123,16 @@ body {
   gap: 8px;
 }
 
+.migration-detail-key {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 4px;
+  background: #fff1e8;
+  color: #c2410c;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .migration-script-cell > .ant-btn {
   flex-shrink: 0;
 }
@@ -299,6 +309,78 @@ body {
 
 .chart-card .recharts-responsive-container {
   min-width: 0;
+}
+
+.data-report-page {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.data-report-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 16px;
+  border: 1px solid #e5e7eb;
+  background: #fafafa;
+}
+
+.data-report-meta > div {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-right: 1px solid #e5e7eb;
+}
+
+.data-report-meta > div:last-child {
+  border-right: 0;
+}
+
+.data-report-meta span,
+.report-executive-summary span {
+  color: #646a73;
+  font-size: 12px;
+}
+
+.data-report-meta strong {
+  overflow: hidden;
+  color: #1f2329;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-analysis-card .ant-card-body {
+  padding: 0;
+}
+
+.report-executive-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid #eef0f3;
+  background: #fafafa;
+}
+
+.report-executive-summary > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 14px 16px;
+  border-right: 1px solid #eef0f3;
+}
+
+.report-executive-summary > div:last-child {
+  border-right: 0;
+}
+
+.report-executive-summary strong {
+  color: #1f2329;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .migration-stat-sections {
@@ -540,6 +622,22 @@ body {
   .migration-category-grid,
   .migration-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .data-report-meta,
+  .report-executive-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .data-report-meta > div,
+  .report-executive-summary > div {
+    border-right: 0;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .data-report-meta > div:last-child,
+  .report-executive-summary > div:last-child {
+    border-bottom: 0;
   }
 }
 

@@ -55,29 +55,6 @@ function getRegisteredTimestamp(record: MigrationRecord) {
   return parsed.isValid() ? parsed.valueOf() : 0;
 }
 
-function getProcessedTimestamp(record: MigrationRecord) {
-  const value = getMigrationField(record, ['处理时间'], '');
-  if (!value || value === '-') return 0;
-
-  const numericValue = Number(value);
-  if (Number.isFinite(numericValue) && numericValue > 0) {
-    return numericValue < 1_000_000_000_000 ? numericValue * 1000 : numericValue;
-  }
-
-  const parsed = dayjs(value);
-  return parsed.isValid() ? parsed.valueOf() : 0;
-}
-
-function getTransferCount(record: MigrationRecord) {
-  const value = getMigrationField(record, ['转量数量'], '0').replace(/,/g, '');
-  const count = Number(value);
-  return Number.isFinite(count) && count > 0 ? count : 0;
-}
-
-function isBlockedRecord(record: MigrationRecord) {
-  return getMigrationField(record, ['定性']).trim() === '封号';
-}
-
 export default function UserMigration() {
   const navigate = useNavigate();
   const [records, setRecords] = useState<MigrationRecord[]>(() => loadMigrationRecords());
@@ -136,98 +113,6 @@ export default function UserMigration() {
   const completedCount = records.filter((record) => record.status === '已完成').length;
   const migratingCount = records.filter((record) => record.status === '迁移中').length;
   const completionRate = records.length ? Math.round((completedCount / records.length) * 100) : 0;
-
-  const blockedStats = useMemo(() => {
-    const now = dayjs();
-    const yesterdayStart = now.subtract(1, 'day').startOf('day').valueOf();
-    const yesterdayEnd = now.subtract(1, 'day').endOf('day').valueOf();
-    const weekStart = now.subtract(6, 'day').startOf('day').valueOf();
-    const monthStart = now.subtract(29, 'day').startOf('day').valueOf();
-    const todayEnd = now.endOf('day').valueOf();
-    const blockedRecords = records.filter(isBlockedRecord);
-
-    const countInRange = (start: number, end: number) => blockedRecords.filter((record) => {
-      const registeredAt = getRegisteredTimestamp(record);
-      return registeredAt >= start && registeredAt <= end;
-    }).length;
-
-    return [
-      { label: '上一日封号数据', color: 'red', count: countInRange(yesterdayStart, yesterdayEnd) },
-      { label: '近一周封号数据', color: 'orange', count: countInRange(weekStart, todayEnd) },
-      { label: '近一月封号数据', color: 'gold', count: countInRange(monthStart, todayEnd) },
-      { label: '累计封号数据', color: 'blue', count: blockedRecords.length },
-    ];
-  }, [records]);
-
-  const transferStats = useMemo(() => {
-    const now = dayjs();
-    const yesterdayStart = now.subtract(1, 'day').startOf('day').valueOf();
-    const yesterdayEnd = now.subtract(1, 'day').endOf('day').valueOf();
-    const weekStart = now.subtract(6, 'day').startOf('day').valueOf();
-    const monthStart = now.subtract(29, 'day').startOf('day').valueOf();
-    const todayEnd = now.endOf('day').valueOf();
-
-    const sumInRange = (start: number, end: number) => records.reduce((total, record) => {
-      const processedAt = getProcessedTimestamp(record);
-      if (processedAt < start || processedAt > end) return total;
-      return total + getTransferCount(record);
-    }, 0);
-    const totalTransferCount = records.reduce((total, record) => total + getTransferCount(record), 0);
-
-    return [
-      { label: '上一日迁移用户数量', color: 'red', count: sumInRange(yesterdayStart, yesterdayEnd) },
-      { label: '近一周迁移用户数量', color: 'orange', count: sumInRange(weekStart, todayEnd) },
-      { label: '近一月迁移用户数量', color: 'gold', count: sumInRange(monthStart, todayEnd) },
-      { label: '累计迁移用户数量', color: 'blue', count: totalTransferCount },
-    ];
-  }, [records]);
-
-  const transferTimesStats = useMemo(() => {
-    const now = dayjs();
-    const yesterdayStart = now.subtract(1, 'day').startOf('day').valueOf();
-    const yesterdayEnd = now.subtract(1, 'day').endOf('day').valueOf();
-    const weekStart = now.subtract(6, 'day').startOf('day').valueOf();
-    const monthStart = now.subtract(29, 'day').startOf('day').valueOf();
-    const todayEnd = now.endOf('day').valueOf();
-    const transferredRecords = records.filter((record) => getTransferCount(record) > 0);
-
-    const countInRange = (start: number, end: number) => transferredRecords.filter((record) => {
-      const processedAt = getProcessedTimestamp(record);
-      return processedAt >= start && processedAt <= end;
-    }).length;
-
-    return [
-      { label: '上一日迁移人次', color: 'red', count: countInRange(yesterdayStart, yesterdayEnd) },
-      { label: '近一周迁移人次', color: 'orange', count: countInRange(weekStart, todayEnd) },
-      { label: '近一月迁移人次', color: 'gold', count: countInRange(monthStart, todayEnd) },
-      { label: '累计迁移人次', color: 'blue', count: transferredRecords.length },
-    ];
-  }, [records]);
-
-  const renderStatSection = (
-    title: string,
-    stats: Array<{ label: string; color: string; count: number }>,
-    unit: string,
-    tone: 'danger' | 'warning' | 'primary',
-  ) => (
-    <section className="migration-stat-section" data-tone={tone}>
-      <div className="migration-stat-section-header">
-        <div className="migration-stat-section-title">{title}</div>
-      </div>
-      <div className="migration-category-grid">
-        {stats.map((item) => (
-          <div key={item.label} className="migration-category-item" data-tone={item.color}>
-            <span className="migration-category-label">{item.label}</span>
-            <div className="migration-category-value">
-              <strong>{item.count.toLocaleString()}</strong>
-              <span>{unit}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-
 
   const detailRecord = useMemo(
     () => records.find((record) => record.id === detailRecordId) || null,
@@ -646,14 +531,6 @@ export default function UserMigration() {
         </div>
       </Card>
 
-      <Card size="small" title="统计" style={{ marginBottom: 16 }}>
-        <div className="migration-stat-sections">
-          {renderStatSection('封号数据', blockedStats, '条', 'danger')}
-          {renderStatSection('转量数据', transferStats, '人', 'warning')}
-          {renderStatSection('人次', transferTimesStats, '人次', 'primary')}
-        </div>
-      </Card>
-
       <Table
         dataSource={filteredRecords}
         columns={columns}
@@ -707,9 +584,15 @@ export default function UserMigration() {
             <Descriptions.Item label="迁移账号手机号">{getMigrationField(detailRecord, ['迁移账号绑定手机号'])}</Descriptions.Item>
             <Descriptions.Item label="承接账号">{getMigrationField(detailRecord, ['承接账号对你昵称'])}</Descriptions.Item>
             <Descriptions.Item label="承接账号手机号">{getMigrationField(detailRecord, ['承接账号绑定手机号'])}</Descriptions.Item>
-            <Descriptions.Item label="迁移类型">{getMigrationField(detailRecord, ['迁移类型'])}</Descriptions.Item>
-            <Descriptions.Item label="迁移客户数量">{getMigrationField(detailRecord, ['迁移客户数量'])}</Descriptions.Item>
-            <Descriptions.Item label="leader是否同意">{getMigrationField(detailRecord, ['leader是否同意'])}</Descriptions.Item>
+            <Descriptions.Item label="迁移类型">
+              <span className="migration-detail-key">{getMigrationField(detailRecord, ['迁移类型'])}</span>
+            </Descriptions.Item>
+            <Descriptions.Item label="迁移客户数量">
+              <span className="migration-detail-key">{getMigrationField(detailRecord, ['迁移客户数量'])}</span>
+            </Descriptions.Item>
+            <Descriptions.Item label="leader是否同意">
+              <span className="migration-detail-key">{getMigrationField(detailRecord, ['leader是否同意'])}</span>
+            </Descriptions.Item>
             <Descriptions.Item label="定性">{getMigrationField(detailRecord, ['定性'])}</Descriptions.Item>
             <Descriptions.Item label="转量数量">
               <InputNumber
@@ -744,7 +627,9 @@ export default function UserMigration() {
                 onChange={(value) => handleManualFieldChange('processedAt', value ? value.format('YYYY-MM-DD HH:mm:ss') : '')}
               />
             </Descriptions.Item>
-            <Descriptions.Item label="完整标签" span={2}>{getMigrationField(detailRecord, ['迁移用户完整标签'])}</Descriptions.Item>
+            <Descriptions.Item label="完整标签" span={2}>
+              <span className="migration-detail-key">{getMigrationField(detailRecord, ['迁移用户完整标签'])}</span>
+            </Descriptions.Item>
             <Descriptions.Item label="迁移话术" span={2}>
               {(() => {
                 const migrationScript = getMigrationField(detailRecord, ['迁移话术', '迁移客户原因']);

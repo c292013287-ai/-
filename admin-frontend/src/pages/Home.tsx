@@ -5,7 +5,6 @@ import { DollarOutlined, ThunderboltOutlined, AlertOutlined, SoundOutlined, Plus
 import { getBudgetList } from '../api/dashboard';
 import { getRecharges } from '../api/recharges';
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement, type Announcement } from '../api/announcements';
-import AiAssistant from './AiAssistant';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -112,10 +111,6 @@ export default function Home() {
           <Form.Item name="tag" label="标签" initialValue="系统"><Select options={[{ label: '系统', value: '系统' }, { label: '更新', value: '更新' }, { label: '说明', value: '说明' }, { label: '重要', value: '重要' }]} /></Form.Item>
         </Form>
       </Modal>
-
-      <div style={{ marginTop: 48 }}>
-        <AiAssistant embedded />
-      </div>
     </div>
   );
 }

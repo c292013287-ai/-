@@ -12,6 +12,7 @@ import RechargeRecord from './pages/RechargeRecord';
 import RiskAssessment from './pages/RiskAssessment';
 import UserMigration from './pages/UserMigration';
 import UserMigrationCollect from './pages/UserMigrationCollect';
+import AiAssistant from './pages/AiAssistant';
 
 export default function App() {
   return (
@@ -22,6 +23,10 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route element={<AuthGuard><AppLayout /></AuthGuard>}>
               <Route path="/" element={<Home />} />
+              <Route
+                path="/statistics"
+                element={<AiAssistant title="数据统计" desc="按月汇总充值、主体表现和用户迁移数据" />}
+              />
               <Route path="/warnings" element={<Dashboard />} />
               <Route path="/entities" element={<EntityManage />} />
               <Route path="/consumption" element={<ConsumptionMonitor />} />
