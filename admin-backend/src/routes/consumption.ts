@@ -50,9 +50,10 @@ async function recalculateChain(entityId: number, fromDate: Date) {
 // GET /api/consumption
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const { entityId, startDate, endDate, page = '1', pageSize = '20' } = req.query;
+    const { entityId, sku, startDate, endDate, page = '1', pageSize = '20' } = req.query;
     const where: any = {};
     if (entityId) where.entityId = Number(entityId);
+    if (sku) where.entity = { sku: String(sku) };
     if (startDate || endDate) {
       where.date = {};
       if (startDate) where.date.gte = new Date(startDate as string);
@@ -98,13 +99,14 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 // GET /api/consumption/trend
 router.get('/trend', async (req: AuthRequest, res: Response) => {
   try {
-    const { entityId, days = '30' } = req.query;
+    const { entityId, sku, days = '30' } = req.query;
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - Number(days));
     startDate.setHours(0, 0, 0, 0);
 
     const where: any = { date: { gte: startDate } };
     if (entityId) where.entityId = Number(entityId);
+    if (sku) where.entity = { sku: String(sku) };
 
     const records = await prisma.consumptionRecord.findMany({
       where, orderBy: { date: 'asc' },

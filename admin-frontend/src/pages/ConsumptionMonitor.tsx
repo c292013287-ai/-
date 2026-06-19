@@ -16,6 +16,7 @@ export default function ConsumptionMonitor() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [entityFilter, setEntityFilter] = useState<number | undefined>();
+  const [skuFilter, setSkuFilter] = useState<string | undefined>();
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs]>([dayjs().subtract(30, 'day'), dayjs()]);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -28,18 +29,23 @@ export default function ConsumptionMonitor() {
     setLoading(true);
     const params: any = { page: pagination.current, pageSize: pagination.pageSize, startDate: dateRange[0].format('YYYY-MM-DD'), endDate: dateRange[1].format('YYYY-MM-DD') };
     if (entityFilter) params.entityId = entityFilter;
-    getConsumptionTrend({ entityId: entityFilter || undefined, days: 30 }).then(setChartData).catch(() => setChartData([]));
+    if (skuFilter) params.sku = skuFilter;
+    getConsumptionTrend({ entityId: entityFilter || undefined, sku: skuFilter, days: 30 }).then(setChartData).catch(() => setChartData([]));
     getConsumptionList(params).then(res => { setRecords(res.data); setPagination(p => ({ ...p, total: res.total })); }).finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchData(); }, [entityFilter, dateRange, pagination.current, pagination.pageSize]);
+  useEffect(() => { fetchData(); }, [entityFilter, skuFilter, dateRange, pagination.current, pagination.pageSize]);
 
   useEffect(() => { getEntities().then(setEntities); }, []);
 
   const handleSync = async () => {
     setSyncing(true);
     let done = 0;
-    const targets = entityFilter ? entities.filter(e => e.id === entityFilter && e.status === 'active') : entities.filter(e => e.status === 'active');
+    const targets = entities.filter((entity) => (
+      entity.status === 'active'
+      && (!entityFilter || entity.id === entityFilter)
+      && (!skuFilter || entity.sku === skuFilter)
+    ));
     for (const e of targets) { try { await syncEntity(e.id); done++; } catch {} }
     message.success(`同步完成: ${done} 个主体`);
     setSyncing(false); fetchData();
@@ -86,6 +92,12 @@ export default function ConsumptionMonitor() {
 
   const todayRecs = records.filter(r => dayjs(r.date).format('YYYY-MM-DD') === dayjs().format('YYYY-MM-DD'));
   const todayCons = todayRecs.reduce((s, r) => s + r.consumption, 0);
+  const skuOptions = Array.from(new Set(entities.map((entity) => entity.sku).filter((sku): sku is string => !!sku)))
+    .sort()
+    .map((sku) => ({ label: sku, value: sku }));
+  const entityOptions = entities
+    .filter((entity) => !skuFilter || entity.sku === skuFilter)
+    .map((entity) => ({ label: entity.name, value: entity.id }));
 
   return (
     <div>
@@ -97,9 +109,23 @@ export default function ConsumptionMonitor() {
       </div>
 
       <div className="filter-bar">
+        <Select
+          placeholder="选择SKU"
+          allowClear
+          style={{ width: 180 }}
+          value={skuFilter}
+          onChange={(value) => {
+            setSkuFilter(value);
+            if (entityFilter && value && entities.find((entity) => entity.id === entityFilter)?.sku !== value) {
+              setEntityFilter(undefined);
+            }
+            setPagination((current) => ({ ...current, current: 1 }));
+          }}
+          options={skuOptions}
+        />
         <Select placeholder="选择主体" allowClear style={{ width: 200 }} value={entityFilter}
           onChange={(v) => { setEntityFilter(v); setPagination(p => ({ ...p, current: 1 })); }}
-          options={entities.map(e => ({ label: e.name, value: e.id }))} />
+          options={entityOptions} />
         <DatePicker.RangePicker value={dateRange} onChange={d => { if (d?.[0] && d[1]) { setDateRange([d[0], d[1]]); setPagination(p => ({ ...p, current: 1 })); } }} />
         <div className="filter-bar-spacer" />
         <Button icon={<SyncOutlined spin={syncing} />} onClick={handleSync} loading={syncing}>同步</Button>

@@ -19,6 +19,7 @@ export interface ConsumptionListResult {
 
 export async function getConsumptionList(params: {
   entityId?: number;
+  sku?: string;
   startDate?: string;
   endDate?: string;
   page?: number;
@@ -51,6 +52,7 @@ export interface TrendItem {
 
 export async function getConsumptionTrend(params: {
   entityId?: number;
+  sku?: string;
   days?: number;
 }): Promise<TrendItem[]> {
   const { data } = await client.get('/consumption/trend', { params });
