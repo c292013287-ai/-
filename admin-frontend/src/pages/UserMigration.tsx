@@ -55,6 +55,38 @@ function getRegisteredTimestamp(record: MigrationRecord) {
   return parsed.isValid() ? parsed.valueOf() : 0;
 }
 
+function copyTextFallback(value: string) {
+  const textarea = document.createElement('textarea');
+  const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  textarea.value = value;
+  textarea.setAttribute('readonly', '');
+  textarea.setAttribute('aria-hidden', 'true');
+  Object.assign(textarea.style, {
+    position: 'fixed',
+    top: '0',
+    left: '0',
+    width: '1px',
+    height: '1px',
+    padding: '0',
+    border: '0',
+    outline: '0',
+    opacity: '0.01',
+  });
+
+  document.body.appendChild(textarea);
+  textarea.focus({ preventScroll: true });
+  textarea.select();
+  textarea.setSelectionRange(0, value.length);
+
+  try {
+    return document.execCommand('copy');
+  } finally {
+    document.body.removeChild(textarea);
+    activeElement?.focus({ preventScroll: true });
+  }
+}
+
 export default function UserMigration() {
   const navigate = useNavigate();
   const [records, setRecords] = useState<MigrationRecord[]>(() => loadMigrationRecords());
@@ -187,27 +219,25 @@ export default function UserMigration() {
     setDetailDraft((current) => ({ ...current, [fieldName]: value }));
   };
 
-  const handleCopyMigrationScript = async (value: string) => {
+  const handleCopyMigrationScript = (value: string) => {
     if (!value || value === '-') return;
 
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(value);
-      } else {
-        const textarea = document.createElement('textarea');
-        textarea.value = value;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.select();
-        const copied = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        if (!copied) throw new Error('copy failed');
+    const showSuccess = () => message.success('迁移话术已复制');
+    const useFallback = () => {
+      try {
+        if (!copyTextFallback(value)) throw new Error('copy failed');
+        showSuccess();
+      } catch {
+        message.error('复制失败，请长按话术内容手动复制');
       }
-      message.success('迁移话术已复制');
-    } catch {
-      message.error('复制失败，请手动复制');
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(value).then(showSuccess).catch(useFallback);
+      return;
     }
+
+    useFallback();
   };
 
   const handleDeleteRecord = (record: MigrationRecord) => {
