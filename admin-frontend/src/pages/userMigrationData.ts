@@ -3,6 +3,7 @@ import type { Dayjs } from 'dayjs';
 import type { FeishuRecord } from '../api/migration';
 
 export const MIGRATION_STORAGE_KEY = 'resource-admin-user-migration-records';
+export const DELETED_MIGRATION_SOURCE_IDS_KEY = 'resource-admin-deleted-migration-source-ids';
 export const FEISHU_FORM_LINK_KEY = 'resource-admin-user-migration-feishu-form-link';
 export const FEISHU_FORM_CONFIG_KEY = 'resource-admin-user-migration-feishu-form-config';
 export const MANUAL_MIGRATION_FIELD_KEYS = ['转量数量', '处理人'];
@@ -75,6 +76,24 @@ export function loadMigrationRecords(): MigrationRecord[] {
 
 export function saveMigrationRecords(records: MigrationRecord[]) {
   localStorage.setItem(MIGRATION_STORAGE_KEY, JSON.stringify(records));
+}
+
+function loadDeletedMigrationSourceIds() {
+  try {
+    const raw = localStorage.getItem(DELETED_MIGRATION_SOURCE_IDS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set<string>(Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : []);
+  } catch {
+    return new Set<string>();
+  }
+}
+
+export function markMigrationRecordDeleted(record: MigrationRecord) {
+  if (!record.sourceRecordId) return;
+
+  const deletedSourceIds = loadDeletedMigrationSourceIds();
+  deletedSourceIds.add(record.sourceRecordId);
+  localStorage.setItem(DELETED_MIGRATION_SOURCE_IDS_KEY, JSON.stringify([...deletedSourceIds]));
 }
 
 export function loadFeishuFormLink() {
@@ -215,12 +234,16 @@ export function migrationRecordFromFeishu(record: FeishuRecord): MigrationRecord
 }
 
 export function mergeMigrationRecords(currentRecords: MigrationRecord[], incomingRecords: MigrationRecord[]) {
+  const deletedSourceIds = loadDeletedMigrationSourceIds();
+  const visibleIncomingRecords = incomingRecords.filter(
+    (record) => !record.sourceRecordId || !deletedSourceIds.has(record.sourceRecordId),
+  );
   const currentBySourceId = new Map(
     currentRecords
       .filter((record) => record.sourceRecordId)
       .map((record) => [record.sourceRecordId, record]),
   );
-  const mergedIncomingRecords = incomingRecords.map((incomingRecord) => {
+  const mergedIncomingRecords = visibleIncomingRecords.map((incomingRecord) => {
     const currentRecord = incomingRecord.sourceRecordId ? currentBySourceId.get(incomingRecord.sourceRecordId) : undefined;
     if (!currentRecord) return incomingRecord;
 
@@ -242,7 +265,7 @@ export function mergeMigrationRecords(currentRecords: MigrationRecord[], incomin
     };
   });
 
-  const incomingIds = new Set(incomingRecords.map((record) => record.sourceRecordId).filter(Boolean));
+  const incomingIds = new Set(visibleIncomingRecords.map((record) => record.sourceRecordId).filter(Boolean));
   const preservedRecords = currentRecords.filter((record) => !record.sourceRecordId || !incomingIds.has(record.sourceRecordId));
   return [...mergedIncomingRecords, ...preservedRecords];
 }

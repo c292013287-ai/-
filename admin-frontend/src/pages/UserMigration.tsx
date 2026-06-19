@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Button, Card, DatePicker, Descriptions, InputNumber, Modal, Select, Space, Table, Tag, message } from 'antd';
 import {
   CheckCircleOutlined,
-  CloseCircleOutlined,
   ClockCircleOutlined,
   CopyOutlined,
+  DeleteOutlined,
   EyeOutlined,
   ExportOutlined,
   FilterOutlined,
@@ -23,6 +23,7 @@ import {
   getMigrationField,
   loadFeishuFormConfig,
   loadMigrationRecords,
+  markMigrationRecordDeleted,
   mergeMigrationRecords,
   migrationRecordFromFeishu,
   saveMigrationRecords,
@@ -323,6 +324,24 @@ export default function UserMigration() {
       message.error('复制失败，请手动复制');
     }
   };
+
+  const handleDeleteRecord = (record: MigrationRecord) => {
+    Modal.confirm({
+      title: '确认删除当前信息？',
+      content: '删除后，该记录不会再次同步到用户迁移列表。',
+      okText: '确认删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: () => {
+        markMigrationRecordDeleted(record);
+        persist(records.filter((item) => item.id !== record.id));
+        setDetailRecordId(null);
+        setDetailDraft({ transferCount: '', handler: undefined, processedAt: '' });
+        message.success('当前信息已删除');
+      },
+    });
+  };
+
   const handleResetFilters = () => {
     setFilters({
       entity: '全部',
@@ -654,15 +673,16 @@ export default function UserMigration() {
         destroyOnClose
         width={900}
         footer={[
-          <Button
-            key="close"
-            onClick={() => {
-              setDetailRecordId(null);
-              setDetailDraft({ transferCount: '', handler: undefined, processedAt: '' });
-            }}
-          >
-            关闭
-          </Button>,
+          detailRecord ? (
+            <Button
+              key="delete"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDeleteRecord(detailRecord)}
+            >
+              删除
+            </Button>
+          ) : null,
           detailRecord ? (
             <Button
               key="push"
@@ -692,70 +712,45 @@ export default function UserMigration() {
             <Descriptions.Item label="leader是否同意">{getMigrationField(detailRecord, ['leader是否同意'])}</Descriptions.Item>
             <Descriptions.Item label="定性">{getMigrationField(detailRecord, ['定性'])}</Descriptions.Item>
             <Descriptions.Item label="转量数量">
-              <Space.Compact style={{ width: '100%' }}>
-                <InputNumber
-                  size="small"
-                  min={0}
-                  precision={0}
-                  controls={false}
-                  style={{ width: '100%' }}
-                  value={detailDraft.transferCount ? Number(detailDraft.transferCount) : null}
-                  placeholder="请输入转量数量"
-                  onChange={(value) => handleManualFieldChange('transferCount', value == null ? '' : String(Math.trunc(Number(value))))}
-                />
-                <Button
-                  size="small"
-                  icon={<CloseCircleOutlined />}
-                  disabled={!detailDraft.transferCount}
-                  onClick={() => handleManualFieldChange('transferCount', '')}
-                />
-              </Space.Compact>
+              <InputNumber
+                size="small"
+                min={0}
+                precision={0}
+                controls={false}
+                style={{ width: '100%' }}
+                value={detailDraft.transferCount ? Number(detailDraft.transferCount) : null}
+                placeholder="请输入转量数量"
+                onChange={(value) => handleManualFieldChange('transferCount', value == null ? '' : String(Math.trunc(Number(value))))}
+              />
             </Descriptions.Item>
             <Descriptions.Item label="处理人">
-              <Space.Compact style={{ width: '100%' }}>
-                <Select
-                  size="small"
-                  allowClear
-                  style={{ width: '100%' }}
-                  value={detailDraft.handler}
-                  placeholder="请选择处理人"
-                  options={HANDLER_OPTIONS.map((value) => ({ label: value, value }))}
-                  onChange={(value) => handleManualFieldChange('handler', value)}
-                />
-                <Button
-                  size="small"
-                  icon={<CloseCircleOutlined />}
-                  disabled={!detailDraft.handler}
-                  onClick={() => handleManualFieldChange('handler', undefined)}
-                />
-              </Space.Compact>
+              <Select
+                size="small"
+                style={{ width: '100%' }}
+                value={detailDraft.handler}
+                placeholder="请选择处理人"
+                options={HANDLER_OPTIONS.map((value) => ({ label: value, value }))}
+                onChange={(value) => handleManualFieldChange('handler', value)}
+              />
             </Descriptions.Item>
             <Descriptions.Item label="登记时间">{formatMigrationDate(getMigrationField(detailRecord, ['登记时间'], detailRecord.createdAt))}</Descriptions.Item>
             <Descriptions.Item label="处理时间" span={2}>
-              <Space.Compact style={{ width: '100%' }}>
-                <DatePicker
-                  showTime
-                  size="small"
-                  style={{ width: '100%' }}
-                  value={detailDraft.processedAt ? dayjs(detailDraft.processedAt) : null}
-                  placeholder="请选择处理时间"
-                  onChange={(value) => handleManualFieldChange('processedAt', value ? value.format('YYYY-MM-DD HH:mm:ss') : '')}
-                />
-                <Button
-                  size="small"
-                  icon={<CloseCircleOutlined />}
-                  disabled={!detailDraft.processedAt}
-                  onClick={() => handleManualFieldChange('processedAt', '')}
-                />
-              </Space.Compact>
+              <DatePicker
+                showTime
+                size="small"
+                style={{ width: '100%' }}
+                value={detailDraft.processedAt ? dayjs(detailDraft.processedAt) : null}
+                placeholder="请选择处理时间"
+                onChange={(value) => handleManualFieldChange('processedAt', value ? value.format('YYYY-MM-DD HH:mm:ss') : '')}
+              />
             </Descriptions.Item>
             <Descriptions.Item label="完整标签" span={2}>{getMigrationField(detailRecord, ['迁移用户完整标签'])}</Descriptions.Item>
             <Descriptions.Item label="迁移话术" span={2}>
               {(() => {
                 const migrationScript = getMigrationField(detailRecord, ['迁移话术', '迁移客户原因']);
                 return (
-                  <Space align="start">
-                    <span>{migrationScript}</span>
+                  <div className="migration-script-cell">
+                    <div className="migration-script-content">{migrationScript}</div>
                     <Button
                       size="small"
                       icon={<CopyOutlined />}
@@ -764,7 +759,7 @@ export default function UserMigration() {
                     >
                       复制
                     </Button>
-                  </Space>
+                  </div>
                 );
               })()}
             </Descriptions.Item>

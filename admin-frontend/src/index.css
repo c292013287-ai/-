@@ -115,6 +115,25 @@ body {
   border-radius: 10px;
 }
 
+.migration-script-cell {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.migration-script-cell > .ant-btn {
+  flex-shrink: 0;
+}
+
+.migration-script-content {
+  min-width: 0;
+  flex: 1;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
