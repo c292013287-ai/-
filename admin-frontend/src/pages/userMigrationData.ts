@@ -206,7 +206,7 @@ export function migrationRecordFromFeishu(record: FeishuRecord): MigrationRecord
     score: Number(pickField(fields, ['迁移评分', '评分', 'score']) || 60),
     owner: pickField(fields, ['处理人', '负责人', '跟进人', 'owner']) || '未分配',
     plannedDate: parseFeishuTimestamp(plannedDate).format('YYYY-MM-DD'),
-    remark: pickField(fields, ['迁移客户原因', '备注', '说明', 'remark']),
+    remark: pickField(fields, ['迁移话术', '迁移客户原因', '备注', '说明', 'remark']),
     createdAt,
     source: 'feishu',
     sourceRecordId: record.recordId,

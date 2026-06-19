@@ -260,7 +260,7 @@ export default function UserMigrationCollect() {
     { title: '迁移客户数量', key: 'customerCount', width: 120, sorter: (a: MigrationRecord, b: MigrationRecord) => Number(getMigrationField(a, ['迁移客户数量'], '0')) - Number(getMigrationField(b, ['迁移客户数量'], '0')), render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['迁移客户数量']) },
     { title: '转量数量', key: 'transferCount', width: 100, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['转量数量']) },
     { title: '完整标签', key: 'fullTag', width: 180, ellipsis: true, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['迁移用户完整标签']) },
-    { title: '迁移客户原因', key: 'reason', width: 220, ellipsis: true, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['迁移客户原因']) },
+    { title: '迁移话术', key: 'reason', width: 220, ellipsis: true, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['迁移话术', '迁移客户原因']) },
     { title: '定性', key: 'qualitative', width: 90, render: (_: unknown, record: MigrationRecord) => <Tag color={getMigrationField(record, ['定性']) === '封号' ? 'red' : 'green'}>{getMigrationField(record, ['定性'])}</Tag> },
     { title: 'leader是否同意', key: 'leaderApproved', width: 120, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['leader是否同意']) },
     { title: '处理人', key: 'handler', width: 100, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['处理人']) },

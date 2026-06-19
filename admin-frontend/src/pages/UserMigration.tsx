@@ -5,6 +5,7 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   ClockCircleOutlined,
+  CopyOutlined,
   EyeOutlined,
   ExportOutlined,
   FilterOutlined,
@@ -300,6 +301,28 @@ export default function UserMigration() {
     setDetailDraft((current) => ({ ...current, [fieldName]: value }));
   };
 
+  const handleCopyMigrationScript = async (value: string) => {
+    if (!value || value === '-') return;
+
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = value;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (!copied) throw new Error('copy failed');
+      }
+      message.success('迁移话术已复制');
+    } catch {
+      message.error('复制失败，请手动复制');
+    }
+  };
   const handleResetFilters = () => {
     setFilters({
       entity: '全部',
@@ -400,7 +423,7 @@ export default function UserMigration() {
       return;
     }
 
-    const header = ['案例ID', '提交人', '上级', '所属SKU', '主体', '迁移账号', '迁移账号手机号', '承接账号', '承接账号手机号', '迁移类型', '迁移客户数量', '转量数量', '迁移用户完整标签', '迁移客户原因', '定性', 'leader是否同意', '处理人', '登记时间', '操作状态'];
+    const header = ['案例ID', '提交人', '上级', '所属SKU', '主体', '迁移账号', '迁移账号手机号', '承接账号', '承接账号手机号', '迁移类型', '迁移客户数量', '转量数量', '迁移用户完整标签', '迁移话术', '定性', 'leader是否同意', '处理人', '登记时间', '操作状态'];
     const rows = filteredRecords.map((record) => [
       getMigrationField(record, ['案例ID']),
       getMigrationField(record, ['提交人']),
@@ -415,7 +438,7 @@ export default function UserMigration() {
       getMigrationField(record, ['迁移客户数量']),
       getMigrationField(record, ['转量数量']),
       getMigrationField(record, ['迁移用户完整标签']),
-      getMigrationField(record, ['迁移客户原因']),
+      getMigrationField(record, ['迁移话术', '迁移客户原因']),
       getMigrationField(record, ['定性']),
       getMigrationField(record, ['leader是否同意']),
       getMigrationField(record, ['处理人']),
@@ -727,7 +750,24 @@ export default function UserMigration() {
               </Space.Compact>
             </Descriptions.Item>
             <Descriptions.Item label="完整标签" span={2}>{getMigrationField(detailRecord, ['迁移用户完整标签'])}</Descriptions.Item>
-            <Descriptions.Item label="迁移客户原因" span={2}>{getMigrationField(detailRecord, ['迁移客户原因'])}</Descriptions.Item>
+            <Descriptions.Item label="迁移话术" span={2}>
+              {(() => {
+                const migrationScript = getMigrationField(detailRecord, ['迁移话术', '迁移客户原因']);
+                return (
+                  <Space align="start">
+                    <span>{migrationScript}</span>
+                    <Button
+                      size="small"
+                      icon={<CopyOutlined />}
+                      disabled={!migrationScript || migrationScript === '-'}
+                      onClick={() => handleCopyMigrationScript(migrationScript)}
+                    >
+                      复制
+                    </Button>
+                  </Space>
+                );
+              })()}
+            </Descriptions.Item>
           </Descriptions>
         )}
       </Modal>
