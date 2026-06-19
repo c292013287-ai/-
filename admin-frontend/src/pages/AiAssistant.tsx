@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, DatePicker, Empty, Progress, Row, Col, Spin, Table, Tag, Typography } from 'antd';
-import { AlertOutlined, BarChartOutlined, CalendarOutlined, DollarOutlined, RiseOutlined, TeamOutlined, UserSwitchOutlined } from '@ant-design/icons';
+import { AlertOutlined, BarChartOutlined, CalendarOutlined, DollarOutlined, RiseOutlined, TeamOutlined, ThunderboltOutlined, UserSwitchOutlined } from '@ant-design/icons';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from 'recharts';
 import dayjs from 'dayjs';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 import { getEntities, type WecomEntity } from '../api/entities';
 import { getRecharges, type RechargeRecord } from '../api/recharges';
+import { getBudgetList } from '../api/dashboard';
 import { getMigrationField, loadMigrationRecords, type MigrationRecord } from './userMigrationData';
 
 const { Text } = Typography;
@@ -118,11 +120,15 @@ export default function AiAssistant({
   title = 'BI分析报告',
   desc = '按月份统计主体充值表现，并补充用户迁移与转量数据',
 }: AiAssistantProps) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(dayjs());
   const [entities, setEntities] = useState<WecomEntity[]>([]);
   const [recharges, setRecharges] = useState<RechargeRecord[]>([]);
   const [migrationRecords, setMigrationRecords] = useState<MigrationRecord[]>(() => loadMigrationRecords());
+  const [monthlyRecharge, setMonthlyRecharge] = useState(0);
+  const [todayConsumption, setTodayConsumption] = useState(0);
+  const [warningCount, setWarningCount] = useState(0);
 
   const fetchData = () => {
     setLoading(true);
@@ -131,14 +137,22 @@ export default function AiAssistant({
     Promise.all([
       getEntities(),
       getRecharges({ ...range, pageSize: 99999 }),
+      getBudgetList(),
     ])
-      .then(([entityRes, rechargeRes]) => {
+      .then(([entityRes, rechargeRes, budgetRes]) => {
+        const budgetRows = Array.isArray(budgetRes?.rows) ? budgetRes.rows : [];
         setEntities(Array.isArray(entityRes) ? entityRes : []);
         setRecharges(Array.isArray(rechargeRes?.data) ? rechargeRes.data : []);
+        setMonthlyRecharge(Number(rechargeRes?.monthlyTotal || 0));
+        setTodayConsumption(Number(budgetRes?.summary?.todayConsumption || 0));
+        setWarningCount(budgetRows.filter((row) => row.countdownDays >= 0 && row.countdownDays < 5).length);
       })
       .catch(() => {
         setEntities([]);
         setRecharges([]);
+        setMonthlyRecharge(0);
+        setTodayConsumption(0);
+        setWarningCount(0);
       })
       .finally(() => setLoading(false));
   };
@@ -262,6 +276,11 @@ export default function AiAssistant({
     name: row.name.length > 8 ? `${row.name.slice(0, 8)}...` : row.name,
     充值费用: Number(row.rechargeFee.toFixed(2)),
   }));
+  const operationalMetrics = [
+    { title: '本月充值总额', value: monthlyRecharge, suffix: '元', icon: <DollarOutlined />, color: '#ed6a1c', route: '/recharges' },
+    { title: '今日累计获客助手进量', value: todayConsumption, suffix: '个', icon: <ThunderboltOutlined />, color: '#1677ff', route: '/consumption' },
+    { title: '预警主体', value: warningCount, suffix: '个', icon: <AlertOutlined />, color: warningCount > 0 ? '#ff4d4f' : '#52c41a', route: '/warnings' },
+  ];
   const analysisRows = useMemo<AnalysisRow[]>(() => {
     const blockedRate = migrationSummary.submitted > 0
       ? migrationSummary.blocked / migrationSummary.submitted
@@ -427,6 +446,38 @@ export default function AiAssistant({
           />
         }
       />
+
+      <section className="report-section">
+        <div className="report-section-heading">
+          <div>
+            <strong>实时经营概览</strong>
+            <span>点击指标可查看对应业务明细</span>
+          </div>
+        </div>
+        <Row gutter={[16, 16]}>
+          {operationalMetrics.map((metric) => (
+            <Col xs={24} md={8} key={metric.title}>
+              <Card
+                className="home-metric-card report-operational-card"
+                hoverable
+                styles={{ body: { padding: '20px 22px' } }}
+                onClick={() => navigate(metric.route)}
+              >
+                <div className="report-operational-content">
+                  <div>
+                    <Text type="secondary" className="home-metric-title">{metric.title}</Text>
+                    <div className="report-operational-value" style={{ color: metric.color }}>
+                      {metric.value.toLocaleString()}
+                      <Text>{metric.suffix}</Text>
+                    </div>
+                  </div>
+                  <div className="report-operational-icon" style={{ color: metric.color }}>{metric.icon}</div>
+                </div>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      </section>
 
       <div className="data-report-meta">
         <div><span>报告周期</span><strong>{selectedMonth.format('YYYY年MM月')}</strong></div>

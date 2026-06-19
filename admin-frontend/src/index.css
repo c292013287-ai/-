@@ -317,6 +317,73 @@ body {
   margin: 0 auto;
 }
 
+.report-section {
+  margin-bottom: 20px;
+}
+
+.report-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.report-section-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.report-section-heading strong {
+  color: #1f2329;
+  font-size: 15px;
+}
+
+.report-section-heading span {
+  color: #8f959e;
+  font-size: 12px;
+}
+
+.report-operational-card {
+  height: 100%;
+  cursor: pointer;
+}
+
+.report-operational-content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.report-operational-value {
+  margin-top: 7px;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-operational-value .ant-typography {
+  margin-left: 5px;
+  color: #8f959e;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.report-operational-icon {
+  display: flex;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #eef0f3;
+  border-radius: 6px;
+  background: #fafafa;
+  font-size: 21px;
+}
+
 .data-report-meta {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
