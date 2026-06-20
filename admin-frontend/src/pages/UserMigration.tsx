@@ -44,9 +44,9 @@ function canPushDraft(draft: DetailDraft) {
   return /^\d+$/.test(draft.transferCount) && !!draft.handler && dayjs(draft.processedAt).isValid();
 }
 
-function hasLocalHandler(record: MigrationRecord) {
-  const handler = record.rawFields?.处理人?.trim();
-  return !!handler && handler !== '-' && handler !== '未分配';
+function hasLocalOperationStatus(record: MigrationRecord) {
+  const operationStatus = record.rawFields?.操作状态?.trim();
+  return !!operationStatus && operationStatus !== '-';
 }
 
 function getRegisteredTimestamp(record: MigrationRecord) {
@@ -277,8 +277,8 @@ export default function UserMigration() {
   };
 
   const handlePushStatus = async (record: MigrationRecord) => {
-    if (hasLocalHandler(record)) {
-      message.warning('该记录已有处理人，无法重复推送');
+    if (hasLocalOperationStatus(record)) {
+      message.warning('该记录已有操作状态，无法重复推送');
       return;
     }
 
@@ -604,8 +604,8 @@ export default function UserMigration() {
             <Button
               key="push"
               type="primary"
-              disabled={hasLocalHandler(detailRecord) || !canPushDraft(detailDraft)}
-              title={hasLocalHandler(detailRecord) ? '该记录已有处理人，无法重复推送' : undefined}
+              disabled={hasLocalOperationStatus(detailRecord) || !canPushDraft(detailDraft)}
+              title={hasLocalOperationStatus(detailRecord) ? '该记录已有操作状态，无法重复推送' : undefined}
               loading={pushingId === detailRecord.id}
               onClick={() => handlePushStatus(detailRecord)}
             >
