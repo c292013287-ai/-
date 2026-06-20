@@ -40,6 +40,7 @@ ssh "$SERVER" << 'ENDSSH'
 cd /opt/resource-admin/admin-backend
 npm install --production
 npx prisma generate
+npx prisma db push
 pm2 restart admin-backend || pm2 start dist/index.js --name admin-backend
 pm2 save
 echo "✅ PM2 重启完成"

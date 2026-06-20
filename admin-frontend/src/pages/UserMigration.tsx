@@ -620,7 +620,9 @@ export default function UserMigration() {
             <Descriptions.Item label="提交人">{getMigrationField(detailRecord, ['提交人'])}</Descriptions.Item>
             <Descriptions.Item label="上级">{getMigrationField(detailRecord, ['上级'])}</Descriptions.Item>
             <Descriptions.Item label="所属SKU">{getMigrationField(detailRecord, ['所属SKU'])}</Descriptions.Item>
-            <Descriptions.Item label="主体" span={2}>{getMigrationField(detailRecord, ['选择要迁移用户的主体'])}</Descriptions.Item>
+            <Descriptions.Item label="主体" span={2}>
+              <span className="migration-detail-key">{getMigrationField(detailRecord, ['选择要迁移用户的主体'])}</span>
+            </Descriptions.Item>
             <Descriptions.Item label="迁移账号">{getMigrationField(detailRecord, ['迁移账号对内昵称'])}</Descriptions.Item>
             <Descriptions.Item label="迁移账号手机号">{getMigrationField(detailRecord, ['迁移账号绑定手机号'])}</Descriptions.Item>
             <Descriptions.Item label="承接账号">{getMigrationField(detailRecord, ['承接账号对你昵称'])}</Descriptions.Item>

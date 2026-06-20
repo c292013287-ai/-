@@ -6,11 +6,14 @@ import { AuthRequest, authMiddleware } from '../middleware/auth';
 const router = Router();
 router.use(authMiddleware);
 
+const RECHARGE_TYPES = ['获客助手', '外部联系人规模'];
+
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
-    const { entityId, startDate, endDate, page = '1', pageSize = '20' } = req.query;
+    const { entityId, rechargeType, startDate, endDate, page = '1', pageSize = '20' } = req.query;
     const where: any = {};
     if (entityId) where.entityId = Number(entityId);
+    if (rechargeType) where.rechargeType = String(rechargeType);
     if (startDate || endDate) {
       where.rechargeDate = {};
       if (startDate) where.rechargeDate.gte = parseDate(startDate as string);
@@ -47,10 +50,15 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
-    const { entityId, amount, rechargeDate, method, orderNumber, feeAmount, remark } = req.body;
+    const { entityId, amount, rechargeType = '获客助手', rechargeDate, method, orderNumber, feeAmount, remark } = req.body;
+    if (!RECHARGE_TYPES.includes(rechargeType)) return res.status(400).json({ error: '充值类型无效' });
+    if (rechargeType === '获客助手' && (!Number.isFinite(Number(amount)) || Number(amount) <= 0)) {
+      return res.status(400).json({ error: '获客助手充值数量必须大于 0' });
+    }
     const record = await prisma.rechargeRecord.create({
       data: {
-        entityId: Number(entityId), amount: Number(amount),
+        entityId: Number(entityId), amount: rechargeType === '外部联系人规模' ? 0 : Number(amount),
+        rechargeType,
         rechargeDate: parseDateTime(rechargeDate), method: method || '微信支付',
         orderNumber: orderNumber || null,
         feeAmount: feeAmount !== undefined ? Number(feeAmount) : null,
@@ -66,9 +74,14 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const { amount, rechargeDate, method, orderNumber, feeAmount, remark } = req.body;
+    const { amount, rechargeType, rechargeDate, method, orderNumber, feeAmount, remark } = req.body;
     const data: any = {};
     if (amount !== undefined) data.amount = Number(amount);
+    if (rechargeType !== undefined) {
+      if (!RECHARGE_TYPES.includes(rechargeType)) return res.status(400).json({ error: '充值类型无效' });
+      data.rechargeType = rechargeType;
+      if (rechargeType === '外部联系人规模') data.amount = 0;
+    }
     if (rechargeDate) data.rechargeDate = parseDateTime(rechargeDate);
     if (method !== undefined) data.method = method;
     if (orderNumber !== undefined) data.orderNumber = orderNumber;

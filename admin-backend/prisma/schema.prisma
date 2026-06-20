@@ -72,7 +72,8 @@ model SyncLog {
 model RechargeRecord {
   id           Int      @id @default(autoincrement())
   entityId     Int      @map("entity_id")
-  amount       Int
+  amount       Int      @default(0)
+  rechargeType String   @default("获客助手") @map("recharge_type")
   rechargeDate DateTime @map("recharge_date")
   method       String   @default("微信支付")
   orderNumber  String?  @map("order_number")
