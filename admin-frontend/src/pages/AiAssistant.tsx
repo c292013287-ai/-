@@ -62,6 +62,12 @@ function getMigrationRegisteredTimestamp(record: MigrationRecord) {
   return parseMigrationTimestamp(getMigrationField(record, ['登记时间'], record.createdAt));
 }
 
+function getMigrationRegisteredDate(record: MigrationRecord) {
+  const value = getMigrationField(record, ['登记时间'], record.source === 'feishu' ? '' : record.createdAt);
+  const timestamp = parseMigrationTimestamp(value);
+  return timestamp ? dayjs(timestamp).format('YYYY-MM-DD') : '';
+}
+
 function getMigrationProcessedTimestamp(record: MigrationRecord) {
   return parseMigrationTimestamp(getMigrationField(record, ['处理时间'], ''));
 }
@@ -232,14 +238,17 @@ export default function AiAssistant({
     const yesterdayEnd = now.subtract(1, 'day').endOf('day').valueOf();
     const weekStart = now.subtract(7, 'day').startOf('day').valueOf();
     const monthStart = now.subtract(30, 'day').startOf('day').valueOf();
+    const yesterdayDate = now.subtract(1, 'day').format('YYYY-MM-DD');
+    const weekStartDate = now.subtract(7, 'day').format('YYYY-MM-DD');
+    const monthStartDate = now.subtract(30, 'day').format('YYYY-MM-DD');
     const blockedRecords = migrationRecords.filter(
       (record) => getMigrationField(record, ['定性']).trim() === '封号',
     );
     const transferredRecords = migrationRecords.filter((record) => getTransferCount(record) > 0);
 
-    const blockedCount = (start: number, end: number) => blockedRecords.filter((record) => {
-      const registeredAt = getMigrationRegisteredTimestamp(record);
-      return registeredAt >= start && registeredAt <= end;
+    const blockedCount = (startDate: string, endDate: string) => blockedRecords.filter((record) => {
+      const registeredDate = getMigrationRegisteredDate(record);
+      return registeredDate >= startDate && registeredDate <= endDate;
     }).length;
     const transferCount = (start: number, end: number) => migrationRecords.reduce((total, record) => {
       const processedAt = getMigrationProcessedTimestamp(record);
@@ -252,9 +261,9 @@ export default function AiAssistant({
 
     return {
       blocked: [
-        { label: '上一日封号数据', color: 'red', count: blockedCount(yesterdayStart, yesterdayEnd) },
-        { label: '近一周封号数据', color: 'orange', count: blockedCount(weekStart, yesterdayEnd) },
-        { label: '近一月封号数据', color: 'gold', count: blockedCount(monthStart, yesterdayEnd) },
+        { label: '上一日封号数据', color: 'red', count: blockedCount(yesterdayDate, yesterdayDate) },
+        { label: '近一周封号数据', color: 'orange', count: blockedCount(weekStartDate, yesterdayDate) },
+        { label: '近一月封号数据', color: 'gold', count: blockedCount(monthStartDate, yesterdayDate) },
         { label: '累计封号数据', color: 'blue', count: blockedRecords.length },
       ],
       transfers: [
