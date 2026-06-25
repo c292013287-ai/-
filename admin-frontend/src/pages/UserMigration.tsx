@@ -33,6 +33,7 @@ import {
 const PUSH_BUTTON_TEXT = '点击推送';
 const PUSH_STATUS_VALUE = '推送';
 const HANDLER_OPTIONS = ['张磊', '刘奕彤'];
+const { RangePicker } = DatePicker;
 
 interface DetailDraft {
   transferCount: string;
@@ -101,13 +102,11 @@ export default function UserMigration() {
     entity: '全部',
     sku: '全部',
     migrationType: '全部',
-    fullTag: '全部',
     qualitative: '全部',
-    leaderApproved: '全部',
     handler: '全部',
-    registeredDate: '',
-    operationStatus: '全部',
+    registeredDateRange: [] as string[],
   });
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 12 });
   const [pushingId, setPushingId] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
   const autoSyncingRef = useRef(false);
@@ -115,16 +114,15 @@ export default function UserMigration() {
   const filteredRecords = useMemo(() => records
     .filter((record) => {
       const registeredDate = formatMigrationDate(getMigrationField(record, ['登记时间'], record.createdAt));
+      const [registeredStart, registeredEnd] = filters.registeredDateRange;
       return (
         (filters.entity === '全部' || getMigrationField(record, ['选择要迁移用户的主体']) === filters.entity)
         && (filters.sku === '全部' || getMigrationField(record, ['所属SKU']) === filters.sku)
         && (filters.migrationType === '全部' || getMigrationField(record, ['迁移类型']) === filters.migrationType)
-        && (filters.fullTag === '全部' || getMigrationField(record, ['迁移用户完整标签']) === filters.fullTag)
         && (filters.qualitative === '全部' || getMigrationField(record, ['定性']) === filters.qualitative)
-        && (filters.leaderApproved === '全部' || getMigrationField(record, ['leader是否同意']) === filters.leaderApproved)
         && (filters.handler === '全部' || getMigrationField(record, ['处理人']) === filters.handler)
-        && (!filters.registeredDate || registeredDate === filters.registeredDate)
-        && (filters.operationStatus === '全部' || getMigrationField(record, ['操作状态'], PUSH_BUTTON_TEXT) === filters.operationStatus)
+        && (!registeredStart || registeredDate >= registeredStart)
+        && (!registeredEnd || registeredDate <= registeredEnd)
       );
     })
     .sort((a, b) => getRegisteredTimestamp(b) - getRegisteredTimestamp(a)), [records, filters]);
@@ -139,11 +137,8 @@ export default function UserMigration() {
       entity: buildOptions(['选择要迁移用户的主体']),
       sku: buildOptions(['所属SKU']),
       migrationType: buildOptions(['迁移类型']),
-      fullTag: buildOptions(['迁移用户完整标签']),
       qualitative: buildOptions(['定性']),
-      leaderApproved: buildOptions(['leader是否同意']),
       handler: [{ label: '全部', value: '全部' }, ...HANDLER_OPTIONS.map((value) => ({ label: value, value }))],
-      operationStatus: [{ label: '全部', value: '全部' }, { label: PUSH_BUTTON_TEXT, value: PUSH_BUTTON_TEXT }, { label: PUSH_STATUS_VALUE, value: PUSH_STATUS_VALUE }],
     };
   }, [records]);
 
@@ -267,12 +262,9 @@ export default function UserMigration() {
       entity: '全部',
       sku: '全部',
       migrationType: '全部',
-      fullTag: '全部',
       qualitative: '全部',
-      leaderApproved: '全部',
       handler: '全部',
-      registeredDate: '',
-      operationStatus: '全部',
+      registeredDateRange: [],
     });
   };
 
@@ -511,30 +503,12 @@ export default function UserMigration() {
               />
             </label>
             <label className="migration-filter-item">
-              <span>完整标签</span>
-              <Select
-                value={filters.fullTag}
-                placeholder="全部"
-                onChange={(value) => setFilters((current) => ({ ...current, fullTag: value }))}
-                options={filterOptions.fullTag}
-              />
-            </label>
-            <label className="migration-filter-item">
               <span>定性</span>
               <Select
                 value={filters.qualitative}
                 placeholder="全部"
                 onChange={(value) => setFilters((current) => ({ ...current, qualitative: value }))}
                 options={filterOptions.qualitative}
-              />
-            </label>
-            <label className="migration-filter-item">
-              <span>leader是否同意</span>
-              <Select
-                value={filters.leaderApproved}
-                placeholder="全部"
-                onChange={(value) => setFilters((current) => ({ ...current, leaderApproved: value }))}
-                options={filterOptions.leaderApproved}
               />
             </label>
             <label className="migration-filter-item">
@@ -548,19 +522,15 @@ export default function UserMigration() {
             </label>
             <label className="migration-filter-item">
               <span>登记时间</span>
-              <DatePicker
-                value={filters.registeredDate ? dayjs(filters.registeredDate) : null}
-                placeholder="选择日期"
-                onChange={(value) => setFilters((current) => ({ ...current, registeredDate: value ? value.format('YYYY-MM-DD') : '' }))}
-              />
-            </label>
-            <label className="migration-filter-item">
-              <span>操作状态</span>
-              <Select
-                value={filters.operationStatus}
-                placeholder="全部"
-                onChange={(value) => setFilters((current) => ({ ...current, operationStatus: value }))}
-                options={filterOptions.operationStatus}
+              <RangePicker
+                value={filters.registeredDateRange.length === 2
+                  ? [dayjs(filters.registeredDateRange[0]), dayjs(filters.registeredDateRange[1])]
+                  : null}
+                placeholder={['开始日期', '结束日期']}
+                onChange={(_, dateStrings) => setFilters((current) => ({
+                  ...current,
+                  registeredDateRange: dateStrings[0] && dateStrings[1] ? dateStrings : [],
+                }))}
               />
             </label>
           </div>
@@ -577,7 +547,15 @@ export default function UserMigration() {
         rowKey="id"
         size="middle"
         scroll={{ x: 1770 }}
-        pagination={{ pageSize: 12, showTotal: (total: number) => `共 ${total} 条迁移记录` }}
+        pagination={{
+          current: pagination.current,
+          pageSize: pagination.pageSize,
+          showSizeChanger: true,
+          pageSizeOptions: [10, 12, 20, 50, 100],
+          showTotal: (total: number) => `共 ${total} 条迁移记录`,
+          onChange: (current, pageSize) => setPagination({ current, pageSize }),
+          onShowSizeChange: (_, pageSize) => setPagination({ current: 1, pageSize }),
+        }}
       />
 
       <Modal

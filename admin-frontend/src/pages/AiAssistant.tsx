@@ -280,13 +280,10 @@ export default function AiAssistant({
   }, [migrationRecords, selectedMonth]);
   const migrationRollingStats = useMemo(() => {
     const now = dayjs();
-    const yesterdayStart = now.subtract(1, 'day').startOf('day').valueOf();
-    const yesterdayEnd = now.subtract(1, 'day').endOf('day').valueOf();
-    const weekStart = now.subtract(7, 'day').startOf('day').valueOf();
-    const monthStart = now.subtract(30, 'day').startOf('day').valueOf();
+    const todayDate = now.format('YYYY-MM-DD');
     const yesterdayDate = now.subtract(1, 'day').format('YYYY-MM-DD');
     const weekStartDate = now.subtract(7, 'day').format('YYYY-MM-DD');
-    const monthStartDate = now.subtract(30, 'day').format('YYYY-MM-DD');
+    const monthStartDate = now.startOf('month').format('YYYY-MM-DD');
     const blockedRecords = migrationRecords.filter(
       (record) => getMigrationField(record, ['定性']).trim() === '封号',
     );
@@ -296,32 +293,32 @@ export default function AiAssistant({
       const registeredDate = getMigrationRegisteredDate(record);
       return registeredDate >= startDate && registeredDate <= endDate;
     }).length;
-    const transferCount = (start: number, end: number) => migrationRecords.reduce((total, record) => {
-      const processedAt = getMigrationProcessedTimestamp(record);
-      return processedAt >= start && processedAt <= end ? total + getTransferCount(record) : total;
+    const transferCountByRegisteredDate = (startDate: string, endDate: string) => migrationRecords.reduce((total, record) => {
+      const registeredDate = getMigrationRegisteredDate(record);
+      return registeredDate >= startDate && registeredDate <= endDate ? total + getTransferCount(record) : total;
     }, 0);
-    const transferTimes = (start: number, end: number) => transferredRecords.filter((record) => {
-      const processedAt = getMigrationProcessedTimestamp(record);
-      return processedAt >= start && processedAt <= end;
+    const transferTimesByRegisteredDate = (startDate: string, endDate: string) => transferredRecords.filter((record) => {
+      const registeredDate = getMigrationRegisteredDate(record);
+      return registeredDate >= startDate && registeredDate <= endDate;
     }).length;
 
     return {
       blocked: [
         { label: '上一日封号数据', color: 'red', count: blockedCount(yesterdayDate, yesterdayDate) },
-        { label: '近一周封号数据', color: 'orange', count: blockedCount(weekStartDate, yesterdayDate) },
-        { label: '近一月封号数据', color: 'gold', count: blockedCount(monthStartDate, yesterdayDate) },
+        { label: '近一周封号数据', color: 'orange', count: blockedCount(weekStartDate, todayDate) },
+        { label: '近一月封号数据', color: 'gold', count: blockedCount(monthStartDate, todayDate) },
         { label: '累计封号数据', color: 'blue', count: blockedRecords.length },
       ],
       transfers: [
-        { label: '上一日迁移用户数量', color: 'red', count: transferCount(yesterdayStart, yesterdayEnd) },
-        { label: '近一周迁移用户数量', color: 'orange', count: transferCount(weekStart, yesterdayEnd) },
-        { label: '近一月迁移用户数量', color: 'gold', count: transferCount(monthStart, yesterdayEnd) },
+        { label: '上一日迁移用户数量', color: 'red', count: transferCountByRegisteredDate(yesterdayDate, yesterdayDate) },
+        { label: '近一周迁移用户数量', color: 'orange', count: transferCountByRegisteredDate(weekStartDate, todayDate) },
+        { label: '近一月迁移用户数量', color: 'gold', count: transferCountByRegisteredDate(monthStartDate, todayDate) },
         { label: '累计迁移用户数量', color: 'blue', count: migrationRecords.reduce((total, record) => total + getTransferCount(record), 0) },
       ],
       times: [
-        { label: '上一日迁移人次', color: 'red', count: transferTimes(yesterdayStart, yesterdayEnd) },
-        { label: '近一周迁移人次', color: 'orange', count: transferTimes(weekStart, yesterdayEnd) },
-        { label: '近一月迁移人次', color: 'gold', count: transferTimes(monthStart, yesterdayEnd) },
+        { label: '上一日迁移人次', color: 'red', count: transferTimesByRegisteredDate(yesterdayDate, yesterdayDate) },
+        { label: '近一周迁移人次', color: 'orange', count: transferTimesByRegisteredDate(weekStartDate, todayDate) },
+        { label: '近一月迁移人次', color: 'gold', count: transferTimesByRegisteredDate(monthStartDate, todayDate) },
         { label: '累计迁移人次', color: 'blue', count: transferredRecords.length },
       ],
     };
