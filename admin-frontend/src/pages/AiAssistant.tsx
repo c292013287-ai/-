@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, DatePicker, Empty, Progress, Row, Col, Spin, Table, Tag, Typography } from 'antd';
 import { AlertOutlined, BarChartOutlined, CalendarOutlined, DollarOutlined, RiseOutlined, TeamOutlined, ThunderboltOutlined, UserSwitchOutlined } from '@ant-design/icons';
@@ -9,7 +9,16 @@ import StatCard from '../components/StatCard';
 import { getEntities, type WecomEntity } from '../api/entities';
 import { getRecharges, type RechargeRecord } from '../api/recharges';
 import { getBudgetList } from '../api/dashboard';
-import { getMigrationField, loadMigrationRecords, type MigrationRecord } from './userMigrationData';
+import { getFeishuMigrationRecords } from '../api/migration';
+import {
+  getMigrationField,
+  loadFeishuFormConfig,
+  loadMigrationRecords,
+  mergeMigrationRecords,
+  migrationRecordFromFeishu,
+  saveMigrationRecords,
+  type MigrationRecord,
+} from './userMigrationData';
 
 const { Text } = Typography;
 
@@ -63,7 +72,7 @@ function getMigrationRegisteredTimestamp(record: MigrationRecord) {
 }
 
 function getMigrationRegisteredDate(record: MigrationRecord) {
-  const value = getMigrationField(record, ['登记时间'], record.source === 'feishu' ? '' : record.createdAt);
+  const value = getMigrationField(record, ['登记时间'], record.createdAt);
   const timestamp = parseMigrationTimestamp(value);
   return timestamp ? dayjs(timestamp).format('YYYY-MM-DD') : '';
 }
@@ -135,17 +144,46 @@ export default function AiAssistant({
   const [monthlyRecharge, setMonthlyRecharge] = useState(0);
   const [todayConsumption, setTodayConsumption] = useState(0);
   const [warningCount, setWarningCount] = useState(0);
+  const syncingMigrationRef = useRef(false);
 
-  const fetchData = () => {
+  const syncMigrationRecords = useCallback(async () => {
+    const currentRecords = loadMigrationRecords();
+    const config = loadFeishuFormConfig();
+    if (!config.appToken || !config.tableId || syncingMigrationRef.current) {
+      setMigrationRecords(currentRecords);
+      return currentRecords;
+    }
+
+    syncingMigrationRef.current = true;
+    try {
+      const feishuRows = await getFeishuMigrationRecords({
+        appToken: config.appToken,
+        tableId: config.tableId,
+        viewId: config.viewId || undefined,
+      });
+      const incomingRecords = feishuRows.map(migrationRecordFromFeishu);
+      const nextRecords = mergeMigrationRecords(currentRecords, incomingRecords);
+      saveMigrationRecords(nextRecords);
+      setMigrationRecords(nextRecords);
+      return nextRecords;
+    } catch {
+      setMigrationRecords(currentRecords);
+      return currentRecords;
+    } finally {
+      syncingMigrationRef.current = false;
+    }
+  }, []);
+
+  const fetchData = useCallback(() => {
     setLoading(true);
-    setMigrationRecords(loadMigrationRecords());
     const range = monthRange(selectedMonth);
     Promise.all([
+      syncMigrationRecords(),
       getEntities(),
       getRecharges({ ...range, pageSize: 99999 }),
       getBudgetList(),
     ])
-      .then(([entityRes, rechargeRes, budgetRes]) => {
+      .then(([, entityRes, rechargeRes, budgetRes]) => {
         const budgetRows = Array.isArray(budgetRes?.rows) ? budgetRes.rows : [];
         setEntities(Array.isArray(entityRes) ? entityRes : []);
         setRecharges(Array.isArray(rechargeRes?.data) ? rechargeRes.data : []);
@@ -161,9 +199,17 @@ export default function AiAssistant({
         setWarningCount(0);
       })
       .finally(() => setLoading(false));
-  };
+  }, [selectedMonth, syncMigrationRecords]);
 
-  useEffect(() => { fetchData(); }, [selectedMonth]);
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void syncMigrationRecords();
+    }, 10_000);
+
+    return () => window.clearInterval(timer);
+  }, [syncMigrationRecords]);
 
   const reportRows = useMemo<EntityMonthRecharge[]>(() => {
     const rowMap = new Map<number, EntityMonthRecharge>();
