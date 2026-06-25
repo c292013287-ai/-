@@ -46,7 +46,7 @@ export async function syncEntityQuota(params: SyncParams) {
   const prevBalance = yesterdayRecord?.quotaBalance ?? entity.quotaTotal;
   // 今日累计消耗 = 昨日余额 + 今日充值 - 当前余额。
   // 只补偿今日充值，避免把昨日充值在次日同步时重复计入。
-  const rechargeMap = await buildRechargeMap([entity.id], utcToday, new Date(utcToday.getTime() + 86399000));
+  const rechargeMap = await buildRechargeMap([entity.id], today, today);
   let totalRecharge = 0;
   rechargeMap.forEach(v => { totalRecharge += v; });
   const rawConsumption = hasHistory ? prevBalance - quota.balance : 0;

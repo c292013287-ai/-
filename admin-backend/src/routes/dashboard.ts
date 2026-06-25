@@ -31,7 +31,7 @@ router.get('/stats', async (_req: AuthRequest, res: Response) => {
       where: { date: { gte: today, lt: new Date(today.getTime() + 86399000) } },
     });
     const todayEntityIds = [...new Set(todayRecords.map(r => r.entityId))];
-    const todayRechargeMap = await buildRechargeMap(todayEntityIds, today, new Date(today.getTime() + 86399000));
+    const todayRechargeMap = await buildRechargeMap(todayEntityIds, today, today);
     const todayConsumption = todayRecords.reduce((sum, r) => {
       const recharge = todayRechargeMap.get(`${r.entityId}_${fmtDate(r.date)}`) || 0;
       return sum + (r.consumption < 0 ? r.consumption + recharge : r.consumption);
@@ -152,7 +152,7 @@ router.get('/budget', async (req: AuthRequest, res: Response) => {
       where: { date: { gte: today, lt: new Date(today.getTime() + 86399000) } },
     });
     const todayEntityIds = [...new Set(todayRecords.map(r => r.entityId))];
-    const todayRechargeMap = await buildRechargeMap(todayEntityIds, today, new Date(today.getTime() + 86399000));
+    const todayRechargeMap = await buildRechargeMap(todayEntityIds, today, today);
     const todayConsumption = todayRecords.reduce((sum, r) => {
       const recharge = todayRechargeMap.get(`${r.entityId}_${fmtDate(r.date)}`) || 0;
       return sum + (r.consumption < 0 ? r.consumption + recharge : r.consumption);

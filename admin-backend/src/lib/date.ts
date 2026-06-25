@@ -2,31 +2,39 @@
  * 日期工具函数
  */
 
+const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /** 将 Date 转为 YYYY-MM-DD 字符串（用于匹配/分组） */
 export function fmtDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const shifted = new Date(d.getTime() + SHANGHAI_OFFSET_MS);
+  const y = shifted.getUTCFullYear();
+  const m = String(shifted.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(shifted.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
-/** 将 YYYY-MM-DD 字符串转为本地零点 Date（避免 UTC 时区偏移） */
+/** 将 YYYY-MM-DD 字符串转为北京时间零点对应的 Date */
 export function parseDate(s: string): Date {
   const [y, m, d] = s.split('-').map(Number);
-  return new Date(y, m - 1, d);
+  return new Date(Date.UTC(y, m - 1, d) - SHANGHAI_OFFSET_MS);
 }
 
-/** 将 Date 归零到当天 00:00:00（本地时区） */
+/** 将 Date 归零到当天北京时间 00:00:00 */
 export function startOfDay(d?: Date): Date {
-  const t = d || new Date();
-  return new Date(t.getFullYear(), t.getMonth(), t.getDate());
+  return parseDate(fmtDate(d || new Date()));
+}
+
+/** 获取北京时间自然日的起止时间 */
+export function dayRange(d: Date): { start: Date; end: Date } {
+  const start = startOfDay(d);
+  return { start, end: new Date(start.getTime() + DAY_MS - 1) };
 }
 
 /** N 天前的零点 */
 export function daysAgo(n: number): Date {
   const d = startOfDay();
-  d.setDate(d.getDate() - n);
-  return d;
+  return new Date(d.getTime() - n * DAY_MS);
 }
 
 /** 解析日期时间字符串 */

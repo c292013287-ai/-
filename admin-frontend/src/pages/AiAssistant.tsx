@@ -230,9 +230,8 @@ export default function AiAssistant({
     const now = dayjs();
     const yesterdayStart = now.subtract(1, 'day').startOf('day').valueOf();
     const yesterdayEnd = now.subtract(1, 'day').endOf('day').valueOf();
-    const weekStart = now.subtract(6, 'day').startOf('day').valueOf();
-    const monthStart = now.subtract(29, 'day').startOf('day').valueOf();
-    const todayEnd = now.endOf('day').valueOf();
+    const weekStart = now.subtract(7, 'day').startOf('day').valueOf();
+    const monthStart = now.subtract(30, 'day').startOf('day').valueOf();
     const blockedRecords = migrationRecords.filter(
       (record) => getMigrationField(record, ['定性']).trim() === '封号',
     );
@@ -254,20 +253,20 @@ export default function AiAssistant({
     return {
       blocked: [
         { label: '上一日封号数据', color: 'red', count: blockedCount(yesterdayStart, yesterdayEnd) },
-        { label: '近一周封号数据', color: 'orange', count: blockedCount(weekStart, todayEnd) },
-        { label: '近一月封号数据', color: 'gold', count: blockedCount(monthStart, todayEnd) },
+        { label: '近一周封号数据', color: 'orange', count: blockedCount(weekStart, yesterdayEnd) },
+        { label: '近一月封号数据', color: 'gold', count: blockedCount(monthStart, yesterdayEnd) },
         { label: '累计封号数据', color: 'blue', count: blockedRecords.length },
       ],
       transfers: [
         { label: '上一日迁移用户数量', color: 'red', count: transferCount(yesterdayStart, yesterdayEnd) },
-        { label: '近一周迁移用户数量', color: 'orange', count: transferCount(weekStart, todayEnd) },
-        { label: '近一月迁移用户数量', color: 'gold', count: transferCount(monthStart, todayEnd) },
+        { label: '近一周迁移用户数量', color: 'orange', count: transferCount(weekStart, yesterdayEnd) },
+        { label: '近一月迁移用户数量', color: 'gold', count: transferCount(monthStart, yesterdayEnd) },
         { label: '累计迁移用户数量', color: 'blue', count: migrationRecords.reduce((total, record) => total + getTransferCount(record), 0) },
       ],
       times: [
         { label: '上一日迁移人次', color: 'red', count: transferTimes(yesterdayStart, yesterdayEnd) },
-        { label: '近一周迁移人次', color: 'orange', count: transferTimes(weekStart, todayEnd) },
-        { label: '近一月迁移人次', color: 'gold', count: transferTimes(monthStart, todayEnd) },
+        { label: '近一周迁移人次', color: 'orange', count: transferTimes(weekStart, yesterdayEnd) },
+        { label: '近一月迁移人次', color: 'gold', count: transferTimes(monthStart, yesterdayEnd) },
         { label: '累计迁移人次', color: 'blue', count: transferredRecords.length },
       ],
     };

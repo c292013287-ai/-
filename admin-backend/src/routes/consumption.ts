@@ -34,7 +34,6 @@ async function recalculateChain(entityId: number, fromDate: Date) {
   const minDate = dateRange.length ? new Date(Math.min(...dateRange.map(d => d.getTime()))) : fromDate;
   minDate.setDate(minDate.getDate() - 1); // 往前多取1天覆盖跨天充值
   const maxDate = dateRange.length ? new Date(Math.max(...dateRange.map(d => d.getTime()))) : fromDate;
-  maxDate.setHours(23, 59, 59, 999);
   const rechargeMap = await buildRechargeMap([entityId], minDate, maxDate);
 
   for (let i = 0; i < records.length; i++) {
@@ -73,7 +72,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     // 构建充值映射：有充值的日期，消耗需加上充值额
     const entityIds = [...new Set(records.map(r => r.entityId))];
     const minDate = records.length > 0 ? records[records.length - 1].date : new Date();
-    const maxDate = records.length > 0 ? new Date(records[0].date.getTime() + 86399000) : new Date();
+    const maxDate = records.length > 0 ? records[0].date : new Date();
     const rechargeMap = await buildRechargeMap(entityIds, minDate, maxDate);
 
     res.json({
