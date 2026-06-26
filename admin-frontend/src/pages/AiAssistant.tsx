@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, DatePicker, Empty, Progress, Row, Col, Spin, Table, Tag, Typography } from 'antd';
-import { AlertOutlined, BarChartOutlined, CalendarOutlined, DollarOutlined, RiseOutlined, TeamOutlined, ThunderboltOutlined, UserSwitchOutlined } from '@ant-design/icons';
+import { AlertOutlined, BarChartOutlined, CalendarOutlined, DollarOutlined, RiseOutlined, TeamOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis } from 'recharts';
 import dayjs from 'dayjs';
 import PageHeader from '../components/PageHeader';
@@ -543,15 +543,6 @@ export default function AiAssistant({
         <StatCard title="充值数量" value={totalAmount} suffix="个" gradient="green" color="#52c41a" prefix={<RiseOutlined style={{ color: '#52c41a' }} />} />
         <StatCard title="充值笔数" value={totalRecords} suffix="笔" gradient="red" color="#cf1322" />
       </div>
-
-      <Card size="small" title="用户迁移概况" style={{ marginBottom: 24 }}>
-        <div className="summary-grid bi-migration-summary-grid" style={{ marginBottom: 0 }}>
-          <StatCard title={`${selectedMonth.format('MM月')}迁移提交`} value={migrationSummary.submitted} suffix="条" gradient="blue" color="#1677ff" prefix={<UserSwitchOutlined style={{ color: '#1677ff' }} />} />
-          <StatCard title="封号数据" value={migrationSummary.blocked} suffix="条" gradient="red" color="#cf1322" prefix={<AlertOutlined style={{ color: '#cf1322' }} />} />
-          <StatCard title="转量用户数量" value={migrationSummary.transferPeople} suffix="人" gradient="green" color="#52c41a" prefix={<RiseOutlined style={{ color: '#52c41a' }} />} />
-          <StatCard title="迁移人次" value={migrationSummary.transferTimes} suffix="人次" gradient="orange" color="#ed6a1c" />
-        </div>
-      </Card>
 
       <Card size="small" title="迁移统计" style={{ marginBottom: 24 }}>
         <div className="migration-stat-sections">
