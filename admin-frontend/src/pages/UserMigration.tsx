@@ -32,7 +32,7 @@ import {
 
 const PUSH_BUTTON_TEXT = '点击推送';
 const PUSH_STATUS_VALUE = '推送';
-const HANDLER_OPTIONS = ['张磊', '刘奕彤'];
+const HANDLER_OPTIONS = ['张磊', '刘奕彤', '李娜'];
 const { RangePicker } = DatePicker;
 
 interface DetailDraft {
