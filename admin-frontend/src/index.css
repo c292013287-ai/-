@@ -133,6 +133,24 @@ body {
   line-height: 1.5;
 }
 
+.migration-detail-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+}
+
+.migration-detail-tip {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  color: #8c8c8c;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: left;
+}
+
 .migration-script-cell > .ant-btn {
   flex-shrink: 0;
 }

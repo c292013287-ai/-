@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, DatePicker, Descriptions, InputNumber, Modal, Select, Space, Table, Tag, message } from 'antd';
+import { Button, Card, DatePicker, Descriptions, Input, InputNumber, Modal, Select, Space, Table, Tag, message } from 'antd';
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -108,6 +108,9 @@ export default function UserMigration() {
   });
   const [pagination, setPagination] = useState({ current: 1, pageSize: 12 });
   const [pushingId, setPushingId] = useState<number | null>(null);
+  const [editingRemarkId, setEditingRemarkId] = useState<number | null>(null);
+  const [remarkDraft, setRemarkDraft] = useState('');
+  const [savingRemarkId, setSavingRemarkId] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
   const autoSyncingRef = useRef(false);
 
@@ -353,6 +356,59 @@ export default function UserMigration() {
     await syncFeishuRecords(true);
   };
 
+  const startEditRemark = (record: MigrationRecord) => {
+    setEditingRemarkId(record.id);
+    setRemarkDraft(record.rawFields?.备注?.trim() || '');
+  };
+
+  const cancelEditRemark = () => {
+    setEditingRemarkId(null);
+    setRemarkDraft('');
+  };
+
+  const saveRemark = async (record: MigrationRecord) => {
+    const nextRemark = remarkDraft.trim();
+    const currentRemark = record.rawFields?.备注?.trim() || '';
+    if (nextRemark === currentRemark) {
+      cancelEditRemark();
+      return;
+    }
+
+    if (!record.sourceRecordId) {
+      message.warning('这条记录不是飞书同步记录，无法回写备注');
+      return;
+    }
+
+    const config = loadFeishuFormConfig();
+    if (!config.appToken || !config.tableId) {
+      message.warning('请先在信息采集页配置飞书 App Token 和 Table ID');
+      return;
+    }
+
+    setSavingRemarkId(record.id);
+    try {
+      await updateFeishuMigrationRecord(
+        record.sourceRecordId,
+        { appToken: config.appToken, tableId: config.tableId },
+        { 备注: nextRemark },
+      );
+      persist(records.map((item) => (
+        item.id === record.id
+          ? { ...item, rawFields: { ...(item.rawFields || {}), 备注: nextRemark } }
+          : item
+      )));
+      message.success('备注已保存并回写飞书');
+      cancelEditRemark();
+    } catch (error) {
+      const errorMessage = error && typeof error === 'object' && 'response' in error
+        ? (error as { response?: { data?: { error?: string } } }).response?.data?.error
+        : undefined;
+      message.error(errorMessage || '保存备注失败');
+    } finally {
+      setSavingRemarkId(null);
+    }
+  };
+
   const handleExport = () => {
     if (filteredRecords.length === 0) {
       message.info('当前筛选条件下暂无可导出的记录');
@@ -393,12 +449,42 @@ export default function UserMigration() {
 
   const columns = [
     {
-      title: '案例ID',
-      key: 'caseId',
-      width: 130,
+      title: '备注',
+      key: 'remark',
+      width: 220,
       fixed: 'left' as const,
-      render: (_: unknown, record: MigrationRecord) => <span style={{ fontWeight: 600 }}>{getMigrationField(record, ['案例ID'])}</span>,
+      render: (_: unknown, record: MigrationRecord) => (
+        editingRemarkId === record.id ? (
+          <Input
+            autoFocus
+            size="small"
+            value={remarkDraft}
+            disabled={savingRemarkId === record.id}
+            placeholder="请输入备注"
+            onChange={(event) => setRemarkDraft(event.target.value)}
+            onBlur={() => void saveRemark(record)}
+            onPressEnter={() => void saveRemark(record)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') cancelEditRemark();
+            }}
+          />
+        ) : (
+          <Button
+            type="text"
+            size="small"
+            block
+            loading={savingRemarkId === record.id}
+            onClick={() => startEditRemark(record)}
+            style={{ justifyContent: 'flex-start', paddingInline: 0, textAlign: 'left' }}
+          >
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {record.rawFields?.备注?.trim() || '-'}
+            </span>
+          </Button>
+        )
+      ),
     },
+    { title: '转量数量', key: 'transferCount', width: 100, fixed: 'left' as const, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['转量数量']) },
     {
       title: '提交人',
       key: 'submitter',
@@ -432,7 +518,6 @@ export default function UserMigration() {
       ),
     },
     { title: '迁移类型', key: 'migrationType', width: 170, ellipsis: true, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['迁移类型']) },
-    { title: '转量数量', key: 'transferCount', width: 100, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['转量数量']) },
     { title: '完整标签', key: 'fullTag', width: 180, ellipsis: true, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['迁移用户完整标签']) },
     { title: '定性', key: 'qualitative', width: 90, render: (_: unknown, record: MigrationRecord) => <Tag color={getMigrationField(record, ['定性']) === '封号' ? 'red' : 'green'}>{getMigrationField(record, ['定性'])}</Tag> },
     { title: '登记时间', key: 'registeredAt', width: 120, render: (_: unknown, record: MigrationRecord) => formatMigrationDate(getMigrationField(record, ['登记时间'], record.createdAt)) },
@@ -546,7 +631,7 @@ export default function UserMigration() {
         columns={columns}
         rowKey="id"
         size="middle"
-        scroll={{ x: 1770 }}
+        scroll={{ x: 1990 }}
         pagination={{
           current: pagination.current,
           pageSize: pagination.pageSize,
@@ -567,30 +652,31 @@ export default function UserMigration() {
         }}
         destroyOnClose
         width={900}
-        footer={[
+        footer={
           detailRecord ? (
-            <Button
-              key="delete"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleDeleteRecord(detailRecord)}
-            >
-              删除
-            </Button>
-          ) : null,
-          detailRecord ? (
-            <Button
-              key="push"
-              type="primary"
-              disabled={hasLocalOperationStatus(detailRecord) || !canPushDraft(detailDraft)}
-              title={hasLocalOperationStatus(detailRecord) ? '该记录已有操作状态，无法重复推送' : undefined}
-              loading={pushingId === detailRecord.id}
-              onClick={() => handlePushStatus(detailRecord)}
-            >
-              {PUSH_BUTTON_TEXT}
-            </Button>
-          ) : null,
-        ]}
+            <div className="migration-detail-footer">
+              <div className="migration-detail-tip">如果无法转量，请在列表第一列编辑备注</div>
+              <Space>
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => handleDeleteRecord(detailRecord)}
+                >
+                  删除
+                </Button>
+                <Button
+                  type="primary"
+                  disabled={hasLocalOperationStatus(detailRecord) || !canPushDraft(detailDraft)}
+                  title={hasLocalOperationStatus(detailRecord) ? '该记录已有操作状态，无法重复推送' : undefined}
+                  loading={pushingId === detailRecord.id}
+                  onClick={() => handlePushStatus(detailRecord)}
+                >
+                  {PUSH_BUTTON_TEXT}
+                </Button>
+              </Space>
+            </div>
+          ) : null
+        }
       >
         {detailRecord && (
           <Descriptions bordered size="small" column={2}>
@@ -638,7 +724,7 @@ export default function UserMigration() {
               />
             </Descriptions.Item>
             <Descriptions.Item label="登记时间">{formatMigrationDate(getMigrationField(detailRecord, ['登记时间'], detailRecord.createdAt))}</Descriptions.Item>
-            <Descriptions.Item label="处理时间" span={2}>
+            <Descriptions.Item label="处理时间">
               <DatePicker
                 showTime
                 size="small"
