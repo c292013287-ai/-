@@ -7,6 +7,17 @@ const router = Router();
 router.use(authMiddleware);
 
 const RECHARGE_TYPES = ['获客助手', '外部联系人规模'];
+const REFUND_METHOD = '操作退费';
+
+function validateRechargeAmount(rechargeType: string, method: string | undefined, amount: unknown) {
+  if (rechargeType !== '获客助手') return null;
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount)) return '请输入有效的充值数量';
+  if (method === REFUND_METHOD) {
+    return numericAmount === 0 ? '操作退费数量不能为 0' : null;
+  }
+  return numericAmount > 0 ? null : '非退费支付方式充值数量必须大于 0';
+}
 
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
@@ -52,9 +63,8 @@ router.post('/', async (req: AuthRequest, res: Response) => {
   try {
     const { entityId, amount, rechargeType = '获客助手', rechargeDate, method, orderNumber, feeAmount, remark } = req.body;
     if (!RECHARGE_TYPES.includes(rechargeType)) return res.status(400).json({ error: '充值类型无效' });
-    if (rechargeType === '获客助手' && (!Number.isFinite(Number(amount)) || Number(amount) <= 0)) {
-      return res.status(400).json({ error: '获客助手充值数量必须大于 0' });
-    }
+    const amountError = validateRechargeAmount(rechargeType, method, amount);
+    if (amountError) return res.status(400).json({ error: amountError });
     const record = await prisma.rechargeRecord.create({
       data: {
         entityId: Number(entityId), amount: rechargeType === '外部联系人规模' ? 0 : Number(amount),
@@ -75,6 +85,14 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const { amount, rechargeType, rechargeDate, method, orderNumber, feeAmount, remark } = req.body;
+    const current = await prisma.rechargeRecord.findUnique({ where: { id: Number(req.params.id) } });
+    if (!current) return res.status(404).json({ error: '充值记录不存在' });
+    const nextRechargeType = rechargeType ?? current.rechargeType;
+    const nextMethod = method ?? current.method;
+    const nextAmount = amount ?? current.amount;
+    const amountError = validateRechargeAmount(nextRechargeType, nextMethod, nextAmount);
+    if (amountError) return res.status(400).json({ error: amountError });
+
     const data: any = {};
     if (amount !== undefined) data.amount = Number(amount);
     if (rechargeType !== undefined) {
@@ -82,6 +100,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
       data.rechargeType = rechargeType;
       if (rechargeType === '外部联系人规模') data.amount = 0;
     }
+    if (nextRechargeType === '外部联系人规模') data.amount = 0;
     if (rechargeDate) data.rechargeDate = parseDateTime(rechargeDate);
     if (method !== undefined) data.method = method;
     if (orderNumber !== undefined) data.orderNumber = orderNumber;

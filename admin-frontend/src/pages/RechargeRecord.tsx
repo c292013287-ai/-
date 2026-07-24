@@ -8,8 +8,14 @@ import { getRecharges, createRecharge, updateRecharge, deleteRecharge, type Rech
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 
-const methodColors: Record<string, string> = { '微信支付': 'green', '线下打款': 'blue', '余额支付': 'orange' };
-const PAYMENT_OPTIONS = [{ label: '微信支付', value: '微信支付' }, { label: '线下打款', value: '线下打款' }, { label: '余额支付', value: '余额支付' }];
+const REFUND_METHOD = '操作退费';
+const methodColors: Record<string, string> = { '微信支付': 'green', '线下打款': 'blue', '余额支付': 'orange', [REFUND_METHOD]: 'red' };
+const PAYMENT_OPTIONS = [
+  { label: '微信支付', value: '微信支付' },
+  { label: '线下打款', value: '线下打款' },
+  { label: '余额支付', value: '余额支付' },
+  { label: REFUND_METHOD, value: REFUND_METHOD },
+];
 const RECHARGE_TYPE_OPTIONS = [
   { label: '获客助手', value: '获客助手' },
   { label: '外部联系人规模', value: '外部联系人规模' },
@@ -30,6 +36,7 @@ export default function RechargePage() {
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
   const selectedRechargeType = Form.useWatch('rechargeType', form);
+  const selectedMethod = Form.useWatch('method', form);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadPreview, setUploadPreview] = useState<any[]>([]);
   const [uploadFileName, setUploadFileName] = useState('');
@@ -81,7 +88,11 @@ export default function RechargePage() {
 
   const handleDownloadTemplate = () => {
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['企业微信ID', '主体', 'SKU', '充值类型', '充值数量', '下单日期', '支付方式', '订单编号', '费用金额', '备注'], ['', '开合万象', '声乐', '获客助手', '1000', '2026-06-01 14:30', '微信支付', 'ORD123456', '980', '']]), '模板');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      ['企业微信ID', '主体', 'SKU', '充值类型', '充值数量', '下单日期', '支付方式', '订单编号', '费用金额', '备注'],
+      ['', '开合万象', '声乐', '获客助手', '1000', '2026-06-01 14:30', '微信支付', 'ORD123456', '980', ''],
+      ['', '开合万象', '声乐', '获客助手', '-100', '2026-06-01 14:30', REFUND_METHOD, 'REFUND123456', '-100', ''],
+    ]), '模板');
     XLSX.writeFile(wb, '充值记录导入模板.xlsx');
   };
 
@@ -143,7 +154,7 @@ export default function RechargePage() {
     { title: '主体', key: 'entity', width: 130, render: (_: any, r: RechargeRecord) => <span style={{ fontWeight: 500 }}>{r.entity?.name || '-'}</span> },
     { title: 'SKU', key: 'sku', width: 80, render: (_: any, r: RechargeRecord) => r.entity?.sku || '-' },
     { title: '充值类型', dataIndex: 'rechargeType', width: 130, render: (v: string) => <Tag color={rechargeTypeColors[v || '获客助手'] || 'default'}>{v || '获客助手'}</Tag> },
-    { title: '充值数量', dataIndex: 'amount', width: 110, render: (v: number, r: RechargeRecord) => r.rechargeType === '外部联系人规模' ? '-' : <span style={{ color: '#52c41a', fontWeight: 600 }}>{v.toLocaleString()}</span> },
+    { title: '充值数量', dataIndex: 'amount', width: 110, render: (v: number, r: RechargeRecord) => r.rechargeType === '外部联系人规模' ? '-' : <span style={{ color: v < 0 ? '#ff4d4f' : '#52c41a', fontWeight: 600 }}>{v.toLocaleString()}</span> },
     { title: '下单日期', dataIndex: 'rechargeDate', width: 120, render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm') },
     { title: '支付方式', dataIndex: 'method', width: 90, render: (v: string) => <Tag color={methodColors[v] || 'default'}>{v}</Tag> },
     { title: '订单编号', dataIndex: 'orderNumber', width: 140, ellipsis: true, render: (v: string | null) => v || '-' },
@@ -176,8 +187,25 @@ export default function RechargePage() {
             <Select options={RECHARGE_TYPE_OPTIONS} onChange={(value) => { if (value === '外部联系人规模') form.setFieldValue('amount', undefined); }} />
           </Form.Item>
           {selectedRechargeType !== '外部联系人规模' && (
-            <Form.Item name="amount" label="充值数量" rules={[{ required: true, message: '请输入充值数量' }]} preserve={false}>
-              <InputNumber style={{ width: '100%' }} min={1} precision={0} />
+            <Form.Item
+              name="amount"
+              label="充值数量"
+              rules={[
+                { required: true, message: '请输入充值数量' },
+                {
+                  validator: (_, value) => {
+                    const numericValue = Number(value);
+                    if (!Number.isFinite(numericValue)) return Promise.resolve();
+                    if (selectedMethod === REFUND_METHOD) {
+                      return numericValue === 0 ? Promise.reject(new Error('操作退费数量不能为 0')) : Promise.resolve();
+                    }
+                    return numericValue > 0 ? Promise.resolve() : Promise.reject(new Error('非退费支付方式充值数量必须大于 0'));
+                  },
+                },
+              ]}
+              preserve={false}
+            >
+              <InputNumber style={{ width: '100%' }} min={selectedMethod === REFUND_METHOD ? undefined : 1} precision={0} />
             </Form.Item>
           )}
           <Form.Item name="rechargeDate" label="下单日期" rules={[{ required: true }]}><DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} /></Form.Item>
