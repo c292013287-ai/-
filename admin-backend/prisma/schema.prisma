@@ -28,6 +28,7 @@ model WecomEntity {
   monthlyBudget  Int       @default(0) @map("monthly_budget")
   corpid         String
   secret         String
+  wecomApiBaseUrl String?   @map("wecom_api_base_url")
   status         String    @default("active")
   quotaTotal     Int       @default(0) @map("quota_total")
   quotaBalance   Int       @default(0) @map("quota_balance")

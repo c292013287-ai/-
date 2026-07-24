@@ -8,6 +8,7 @@ export interface WecomEntity {
   monthlyBudget: number;
   corpid: string;
   secret: string;
+  wecomApiBaseUrl: string | null;
   status: string;
   quotaTotal: number;
   quotaBalance: number;
@@ -23,6 +24,7 @@ export interface EntityFormData {
   monthlyBudget?: number;
   corpid: string;
   secret: string;
+  wecomApiBaseUrl?: string;
   quotaTotal?: number;
 }
 

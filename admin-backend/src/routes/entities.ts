@@ -49,12 +49,12 @@ router.post('/:id/sync', async (req: AuthRequest, res: Response) => {
 // POST /api/entities
 router.post('/', async (req: AuthRequest, res: Response) => {
   try {
-    const { name, sku, corpid, secret, quotaTotal, rechargeAmount, monthlyBudget } = req.body;
+    const { name, sku, corpid, secret, quotaTotal, rechargeAmount, monthlyBudget, wecomApiBaseUrl } = req.body;
     if (!name || !corpid || !secret) return res.status(400).json({ error: '名称、企业ID和Secret为必填项' });
 
     res.status(201).json(await prisma.wecomEntity.create({
       data: {
-        name, sku: sku || null, corpid, secret,
+        name, sku: sku || null, corpid, secret, wecomApiBaseUrl: wecomApiBaseUrl || null,
         rechargeAmount: Number(rechargeAmount || 0),
         monthlyBudget: Number(monthlyBudget || 0),
         quotaTotal: Number(quotaTotal || 0),
@@ -69,11 +69,12 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 // PUT /api/entities/:id
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const { name, sku, rechargeAmount, monthlyBudget, corpid, secret, status, quotaTotal } = req.body;
+    const { name, sku, rechargeAmount, monthlyBudget, corpid, secret, status, quotaTotal, wecomApiBaseUrl } = req.body;
     const id = Number(req.params.id);
     if (!(await prisma.wecomEntity.findUnique({ where: { id } }))) return res.status(404).json({ error: '主体不存在' });
 
     const data: any = { name, sku, corpid, secret, status };
+    if (wecomApiBaseUrl !== undefined) data.wecomApiBaseUrl = wecomApiBaseUrl || null;
     if (rechargeAmount !== undefined) data.rechargeAmount = Number(rechargeAmount);
     if (monthlyBudget !== undefined) data.monthlyBudget = Number(monthlyBudget);
     if (quotaTotal !== undefined) { data.quotaTotal = quotaTotal; data.quotaBalance = quotaTotal; }

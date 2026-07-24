@@ -8,7 +8,7 @@ import { getQuotaInfo } from './wecom';
 import { buildRechargeMap } from '../lib/recharge';
 
 interface SyncParams {
-  entity: { id: number; name: string; corpid: string; secret: string; quotaTotal: number };
+  entity: { id: number; name: string; corpid: string; secret: string; quotaTotal: number; wecomApiBaseUrl?: string | null };
   date?: Date; // 同步日期，默认当天
   logMessage?: string;
 }
@@ -20,7 +20,7 @@ export async function syncEntityQuota(params: SyncParams) {
   // UTC 零点的 Date（避免 Prisma 时区转换导致日期漂移）
   const utcToday = new Date(fmtDate(today));
 
-  const quota = await getQuotaInfo(entity.corpid, entity.secret);
+  const quota = await getQuotaInfo(entity.corpid, entity.secret, entity.wecomApiBaseUrl);
 
   // 更新主体配额
   await prisma.wecomEntity.update({

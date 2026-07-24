@@ -48,7 +48,13 @@ export default function EntityManage() {
     try {
       const v = await form.validateFields();
       setSubmitting(true);
-      const d: EntityFormData = { name: v.name, sku: v.sku, corpid: v.corpid, secret: v.secret };
+      const d: EntityFormData = {
+        name: v.name,
+        sku: v.sku,
+        corpid: v.corpid,
+        secret: v.secret,
+        wecomApiBaseUrl: v.wecomApiBaseUrl,
+      };
       if (editingId) { await updateEntity(editingId, d); message.success('更新成功'); }
       else { await createEntity(d); message.success('创建成功'); }
       setModalOpen(false); fetchData();
@@ -64,6 +70,7 @@ export default function EntityManage() {
     { title: '主体名称', dataIndex: 'name', key: 'name', width: 150, render: (v: string) => <span style={{ fontWeight: 500 }}>{v}</span> },
     { title: '企业ID', dataIndex: 'corpid', key: 'corpid', width: 180, ellipsis: true,
       render: (v: string) => <code style={{ background: '#f5f5f5', padding: '2px 6px', borderRadius: 3, fontSize: 12 }}>{v}</code> },
+    { title: '同步出口', dataIndex: 'wecomApiBaseUrl', key: 'wecomApiBaseUrl', width: 190, ellipsis: true, render: (v: string | null) => v || '默认出口' },
     { title: '状态', dataIndex: 'status', key: 'status', width: 80, align: 'center' as const,
       render: (s: string) => <Tag color={s === 'active' ? 'green' : 'orange'}>{s === 'active' ? '启用' : '停用'}</Tag> },
     { title: '获客助手余额', dataIndex: 'quotaBalance', key: 'quotaBalance', width: 120,
@@ -89,7 +96,7 @@ export default function EntityManage() {
         <StatCard title="启用中" value={activeCount} suffix="个" gradient="blue" color="#1890ff" />
       </div>
 
-      <Table dataSource={entities} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 960 }}
+      <Table dataSource={entities} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 1150 }}
         pagination={{ pageSize: 20, showTotal: (t: number) => `共 ${t} 个主体` }} />
 
       <Modal title={editingId ? '编辑主体' : '添加主体'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} confirmLoading={submitting} destroyOnClose width={480}>
@@ -98,6 +105,9 @@ export default function EntityManage() {
           <Form.Item name="sku" label="SKU"><Input placeholder="可选，如 声乐" /></Form.Item>
           <Form.Item name="corpid" label="企业ID" rules={[{ required: true }]}><Input placeholder="wwxxxxxxxxxxxxxx" /></Form.Item>
           <Form.Item name="secret" label="应用Secret" rules={[{ required: true }]}><Input.Password placeholder="获客助手应用的Secret" /></Form.Item>
+          <Form.Item name="wecomApiBaseUrl" label="同步出口地址">
+            <Input placeholder="可选，例如 http://47.95.226.204:8088" />
+          </Form.Item>
         </Form>
       </Modal>
     </div>
