@@ -158,7 +158,7 @@ export default function RechargePage() {
     { title: '下单日期', dataIndex: 'rechargeDate', width: 120, render: (v: string) => dayjs(v).format('YYYY-MM-DD HH:mm') },
     { title: '支付方式', dataIndex: 'method', width: 90, render: (v: string) => <Tag color={methodColors[v] || 'default'}>{v}</Tag> },
     { title: '订单编号', dataIndex: 'orderNumber', width: 140, ellipsis: true, render: (v: string | null) => v || '-' },
-    { title: '费用金额', dataIndex: 'feeAmount', width: 100, render: (v: number | null) => v != null ? <span style={{ color: '#fa8c16' }}>¥{v.toLocaleString()}</span> : '-' },
+    { title: '费用金额', dataIndex: 'feeAmount', width: 100, render: (v: number | null) => v != null ? <span style={{ color: v < 0 ? '#ff4d4f' : '#fa8c16' }}>¥{v.toLocaleString()}</span> : '-' },
     { title: '操作', key: 'action', width: 140, render: (_: any, r: RechargeRecord) => (<Space><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button><Popconfirm title="确认删除？" onConfirm={() => handleDelete(r.id)}><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space>) },
   ];
 
@@ -211,7 +211,23 @@ export default function RechargePage() {
           <Form.Item name="rechargeDate" label="下单日期" rules={[{ required: true }]}><DatePicker showTime format="YYYY-MM-DD HH:mm" style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="method" label="支付方式"><Select options={PAYMENT_OPTIONS} /></Form.Item>
           <Form.Item name="orderNumber" label="订单编号"><Input /></Form.Item>
-          <Form.Item name="feeAmount" label="费用金额"><InputNumber style={{ width: '100%' }} min={0} placeholder="如手续费等" /></Form.Item>
+          <Form.Item
+            name="feeAmount"
+            label="费用金额"
+            rules={[
+              {
+                validator: (_, value) => {
+                  if (value === undefined || value === null || value === '') return Promise.resolve();
+                  const numericValue = Number(value);
+                  if (!Number.isFinite(numericValue)) return Promise.reject(new Error('请输入有效的费用金额'));
+                  if (selectedMethod === REFUND_METHOD) return Promise.resolve();
+                  return numericValue >= 0 ? Promise.resolve() : Promise.reject(new Error('非退费支付方式费用金额不能为负数'));
+                },
+              },
+            ]}
+          >
+            <InputNumber style={{ width: '100%' }} min={selectedMethod === REFUND_METHOD ? undefined : 0} placeholder="如手续费等" />
+          </Form.Item>
           <Form.Item name="remark" label="备注"><Input.TextArea rows={2} /></Form.Item>
         </Form>
       </Modal>

@@ -2,49 +2,11 @@ import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { fmtDate } from '../lib/date';
 import { buildRechargeMap } from '../lib/recharge';
+import { recalculateConsumptionChain } from '../lib/consumption';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 
 const router = Router();
 router.use(authMiddleware);
-
-/**
- * 链式重算消耗: consumption = prevBalance - currentBalance
- */
-async function recalculateChain(entityId: number, fromDate: Date) {
-  const entity = await prisma.wecomEntity.findUnique({ where: { id: entityId } });
-  if (!entity) return;
-
-  const prevDay = new Date(fromDate);
-  prevDay.setDate(prevDay.getDate() - 1);
-  const prevRecord = await prisma.consumptionRecord.findFirst({
-    where: { entityId, date: prevDay },
-    orderBy: { date: 'desc' },
-  });
-
-  let prevBalance = prevRecord?.quotaBalance ?? entity.quotaTotal;
-  const isHead = !prevRecord;
-
-  const records = await prisma.consumptionRecord.findMany({
-    where: { entityId, date: { gte: fromDate } },
-    orderBy: { date: 'asc' },
-  });
-
-  // 构建充值映射（从链首前一天开始，防止跨天充值漏算）
-  const dateRange = records.map(r => r.date);
-  const minDate = dateRange.length ? new Date(Math.min(...dateRange.map(d => d.getTime()))) : fromDate;
-  minDate.setDate(minDate.getDate() - 1); // 往前多取1天覆盖跨天充值
-  const maxDate = dateRange.length ? new Date(Math.max(...dateRange.map(d => d.getTime()))) : fromDate;
-  const rechargeMap = await buildRechargeMap([entityId], minDate, maxDate);
-
-  for (let i = 0; i < records.length; i++) {
-    const r = records[i];
-    const raw = (isHead && i === 0) ? 0 : prevBalance - r.quotaBalance;
-    const recharge = rechargeMap.get(`${entityId}_${fmtDate(r.date)}`) || 0;
-    const consumption = Math.max(0, raw + recharge);
-    await prisma.consumptionRecord.update({ where: { id: r.id }, data: { consumption } });
-    prevBalance = r.quotaBalance;
-  }
-}
 
 // GET /api/consumption
 router.get('/', async (req: AuthRequest, res: Response) => {
@@ -149,7 +111,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
       include: { entity: { select: { id: true, name: true, sku: true } } },
     });
 
-    await recalculateChain(eId, targetDate);
+    await recalculateConsumptionChain(eId, targetDate);
     const updated = await prisma.consumptionRecord.findUnique({
       where: { id: record.id },
       include: { entity: { select: { id: true, name: true, sku: true } } },
@@ -174,7 +136,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
         data: { quotaBalance: Number(quotaBalance) },
       });
     }
-    await recalculateChain(record.entityId, record.date);
+    await recalculateConsumptionChain(record.entityId, record.date);
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: '更新失败' });
@@ -192,7 +154,7 @@ router.delete('/:id', async (req: AuthRequest, res: Response) => {
     const nextDay = new Date(record.date);
     nextDay.setDate(nextDay.getDate() + 1);
     const next = await prisma.consumptionRecord.findFirst({ where: { entityId: record.entityId, date: nextDay } });
-    if (next) await recalculateChain(record.entityId, nextDay);
+    if (next) await recalculateConsumptionChain(record.entityId, nextDay);
 
     res.json({ success: true });
   } catch {
