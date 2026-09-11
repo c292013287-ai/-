@@ -20,7 +20,9 @@ import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 import {
   formatMigrationDate,
+  getMigrationDetailDraft,
   getMigrationField,
+  getMigrationStats,
   loadFeishuFormConfig,
   loadMigrationRecords,
   markMigrationRecordDeleted,
@@ -34,6 +36,7 @@ const PUSH_BUTTON_TEXT = '点击推送';
 const PUSH_STATUS_VALUE = '推送';
 const HANDLER_OPTIONS = ['张磊', '刘奕彤', '李娜'];
 const { RangePicker } = DatePicker;
+const EMPTY_MIGRATION_STATS = getMigrationStats([]);
 
 interface DetailDraft {
   transferCount: string;
@@ -97,7 +100,7 @@ export default function UserMigration() {
   const navigate = useNavigate();
   const [records, setRecords] = useState<MigrationRecord[]>(() => loadMigrationRecords());
   const [detailRecordId, setDetailRecordId] = useState<number | null>(null);
-  const [detailDraft, setDetailDraft] = useState<DetailDraft>({ transferCount: '', handler: undefined, processedAt: '' });
+  const [detailEdits, setDetailDraft] = useState<Partial<DetailDraft>>({});
   const [filters, setFilters] = useState({
     entity: '全部',
     sku: '全部',
@@ -111,6 +114,7 @@ export default function UserMigration() {
   const [editingRemarkId, setEditingRemarkId] = useState<number | null>(null);
   const [remarkDraft, setRemarkDraft] = useState('');
   const [savingRemarkId, setSavingRemarkId] = useState<number | null>(null);
+  const [liveMigrationStats, setLiveMigrationStats] = useState(EMPTY_MIGRATION_STATS);
   const [syncing, setSyncing] = useState(false);
   const autoSyncingRef = useRef(false);
 
@@ -145,17 +149,14 @@ export default function UserMigration() {
     };
   }, [records]);
 
-  const completedCount = records.filter((record) => record.status === '已完成').length;
-  const migratingCount = records.filter((record) => record.status === '迁移中').length;
-  const completionRate = records.length ? Math.round((completedCount / records.length) * 100) : 0;
-
   const detailRecord = useMemo(
     () => records.find((record) => record.id === detailRecordId) || null,
     [records, detailRecordId],
   );
+  const detailDraft: DetailDraft = { ...getMigrationDetailDraft(detailRecord), ...detailEdits };
 
   const openDetail = (record: MigrationRecord) => {
-    setDetailDraft({ transferCount: '', handler: undefined, processedAt: '' });
+    setDetailDraft({});
     setDetailRecordId(record.id);
   };
 
@@ -186,6 +187,7 @@ export default function UserMigration() {
         viewId: config.viewId || undefined,
       });
       const incomingRecords = feishuRows.map(migrationRecordFromFeishu);
+      setLiveMigrationStats(getMigrationStats(incomingRecords));
       const currentRecords = loadMigrationRecords();
       const currentSourceIds = new Set(currentRecords.map((record) => record.sourceRecordId).filter(Boolean));
       const addedCount = incomingRecords.filter((record) => record.sourceRecordId && !currentSourceIds.has(record.sourceRecordId)).length;
@@ -254,7 +256,7 @@ export default function UserMigration() {
         markMigrationRecordDeleted(record);
         persist(records.filter((item) => item.id !== record.id));
         setDetailRecordId(null);
-        setDetailDraft({ transferCount: '', handler: undefined, processedAt: '' });
+        setDetailDraft({});
         message.success('当前信息已删除');
       },
     });
@@ -341,7 +343,7 @@ export default function UserMigration() {
       persist(nextRecords);
       message.success('已回写处理信息，并在飞书操作状态单元格写入“推送”');
       setDetailRecordId(null);
-      setDetailDraft({ transferCount: '', handler: undefined, processedAt: '' });
+      setDetailDraft({});
     } catch (error) {
       const errorMessage = error && typeof error === 'object' && 'response' in error
         ? (error as { response?: { data?: { error?: string } } }).response?.data?.error
@@ -451,7 +453,7 @@ export default function UserMigration() {
     {
       title: '备注',
       key: 'remark',
-      width: 220,
+      width: 100,
       fixed: 'left' as const,
       render: (_: unknown, record: MigrationRecord) => (
         editingRemarkId === record.id ? (
@@ -535,7 +537,7 @@ export default function UserMigration() {
   ];
 
   return (
-    <div>
+    <div className="migration-page">
       <PageHeader
         title="用户迁移"
         desc="采集迁移用户信息，按价值与迁移阶段分类，并统计当前迁移进度"
@@ -548,12 +550,12 @@ export default function UserMigration() {
       />
 
       <div className="summary-grid migration-summary-grid">
-        <StatCard title="采集用户" value={records.length} suffix="人" gradient="blue" color="#1677ff" prefix={<UserSwitchOutlined style={{ color: '#1677ff' }} />} />
-        <StatCard title="迁移中" value={migratingCount} suffix="人" gradient="red" color="#cf1322" prefix={<ClockCircleOutlined style={{ color: '#cf1322' }} />} />
-        <StatCard title="完成率" value={completionRate} suffix="%" gradient="green" color="#52c41a" prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />} />
+        <StatCard title="采集用户" value={liveMigrationStats.totalCollected} suffix="人" gradient="blue" color="#1677ff" prefix={<UserSwitchOutlined style={{ color: '#1677ff' }} />} />
+        <StatCard title="迁移中" value={liveMigrationStats.migratingCount} suffix="人" gradient="red" color="#cf1322" prefix={<ClockCircleOutlined style={{ color: '#cf1322' }} />} />
+        <StatCard title="完成率" value={liveMigrationStats.completionRate} suffix="%" gradient="green" color="#52c41a" prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />} />
       </div>
 
-      <Card size="small" style={{ marginBottom: 16 }}>
+      <Card className="migration-filter-card" size="small" style={{ marginBottom: 16 }}>
         <div className="migration-filter-panel">
           <div className="migration-filter-title">
             <FilterOutlined style={{ color: '#ed6a1c' }} />
@@ -569,7 +571,7 @@ export default function UserMigration() {
                 options={filterOptions.entity}
               />
             </label>
-            <label className="migration-filter-item">
+            <label className="migration-filter-item migration-filter-item-sku">
               <span>所属SKU</span>
               <Select
                 value={filters.sku}
@@ -605,7 +607,7 @@ export default function UserMigration() {
                 options={filterOptions.handler}
               />
             </label>
-            <label className="migration-filter-item">
+            <label className="migration-filter-item migration-filter-item-date">
               <span>登记时间</span>
               <RangePicker
                 value={filters.registeredDateRange.length === 2
@@ -627,10 +629,12 @@ export default function UserMigration() {
       </Card>
 
       <Table
+        className="migration-table"
         dataSource={filteredRecords}
         columns={columns}
         rowKey="id"
         size="middle"
+        rowClassName={(_, index) => (index % 2 === 0 ? 'migration-table-row-even' : 'migration-table-row-odd')}
         scroll={{ x: 1990 }}
         pagination={{
           current: pagination.current,
@@ -648,7 +652,7 @@ export default function UserMigration() {
         open={!!detailRecord}
         onCancel={() => {
           setDetailRecordId(null);
-          setDetailDraft({ transferCount: '', handler: undefined, processedAt: '' });
+          setDetailDraft({});
         }}
         destroyOnClose
         width={900}

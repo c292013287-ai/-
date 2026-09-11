@@ -7,6 +7,7 @@ export const DELETED_MIGRATION_SOURCE_IDS_KEY = 'resource-admin-deleted-migratio
 export const FEISHU_FORM_LINK_KEY = 'resource-admin-user-migration-feishu-form-link';
 export const FEISHU_FORM_CONFIG_KEY = 'resource-admin-user-migration-feishu-form-config';
 export const MANUAL_MIGRATION_FIELD_KEYS = ['转量数量', '处理人'];
+const EMPTY_MIGRATION_STAT_VALUES = new Set(['', '-', '未分配', '待分配']);
 
 export type MigrationCategory = '高价值' | '活跃用户' | '沉默用户' | '待确认';
 export type MigrationStatus = '待采集' | '已采集' | '迁移中' | '已完成';
@@ -158,8 +159,15 @@ export function formatMigrationRecord(values: MigrationFormValues, id?: number):
   };
 }
 
+const accountFieldGroups = [
+  ['迁移账号姓名', '迁移账号对内昵称'],
+  ['承接账号姓名', '承接账号对内昵称', '承接账号对你昵称'],
+];
+
 function pickField(fields: Record<string, string>, keys: string[]) {
-  const matchedKey = keys.find((key) => fields[key] && fields[key].trim() !== '');
+  // Prefer current Feishu column names while supporting previously cached records.
+  const compatibleKeys = keys.flatMap((key) => accountFieldGroups.find((group) => group.includes(key)) || [key]);
+  const matchedKey = compatibleKeys.find((key) => fields[key] && fields[key].trim() !== '');
   return matchedKey ? fields[matchedKey].trim() : '';
 }
 
@@ -199,6 +207,48 @@ export function formatMigrationDate(value: string, format = 'YYYY-MM-DD') {
 
   const parsed = dayjs(value);
   return parsed.isValid() ? parsed.format(format) : value;
+}
+
+export function getMigrationDetailDraft(record: MigrationRecord | null) {
+  const fields = record?.rawFields || {};
+  const transferCount = fields.转量数量?.trim() || '';
+  const handler = fields.处理人?.trim() || '';
+  const timeValue = fields.处理时间?.trim() || '';
+  const processedAt = timeValue ? formatMigrationDate(timeValue, 'YYYY-MM-DD HH:mm:ss') : '';
+
+  return {
+    transferCount: /^\d+$/.test(transferCount) ? transferCount : '',
+    handler: handler && !['-', '未分配', '待分配'].includes(handler) ? handler : undefined,
+    processedAt: processedAt && dayjs(processedAt).isValid() ? processedAt : '',
+  };
+}
+
+function getMigrationSourceField(record: MigrationRecord, keys: string[]) {
+  if (record.rawFields) return pickField(record.rawFields, keys);
+  return getMigrationField(record, keys, '');
+}
+
+function hasMigrationStatValue(record: MigrationRecord, keys: string[]) {
+  const value = getMigrationSourceField(record, keys).trim();
+  return !EMPTY_MIGRATION_STAT_VALUES.has(value);
+}
+
+export function getMigrationStats(records: MigrationRecord[]) {
+  const sourceRecords = records.filter((record) => hasMigrationStatValue(record, ['提交人']));
+  const hasCompletionIndicator = (record: MigrationRecord) => (
+    hasMigrationStatValue(record, ['转量数量'])
+    || hasMigrationStatValue(record, ['处理人'])
+    || hasMigrationStatValue(record, ['备注'])
+  );
+  const completedCount = sourceRecords.filter(hasCompletionIndicator).length;
+  const migratingCount = sourceRecords.filter((record) => !hasCompletionIndicator(record)).length;
+
+  return {
+    totalCollected: sourceRecords.length,
+    migratingCount,
+    completedCount,
+    completionRate: sourceRecords.length ? Math.round((completedCount / sourceRecords.length) * 100) : 0,
+  };
 }
 
 function hashId(value: string) {
