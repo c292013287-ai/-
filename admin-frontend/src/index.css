@@ -267,7 +267,13 @@ body {
 
 .migration-filter-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns:
+    minmax(150px, 1fr)
+    minmax(260px, 1.8fr)
+    minmax(150px, 1fr)
+    minmax(150px, 1fr)
+    minmax(150px, 1fr)
+    minmax(250px, 1.45fr);
   gap: 10px 14px;
   min-width: 0;
 }
@@ -288,11 +294,6 @@ body {
 .migration-filter-item .ant-select,
 .migration-filter-item .ant-picker {
   width: 100%;
-}
-
-.migration-filter-item-sku,
-.migration-filter-item-date {
-  grid-column: span 2;
 }
 
 .migration-filter-item-date .ant-picker {
@@ -891,13 +892,18 @@ body {
   }
 }
 
-@media (min-width: 769px) and (max-width: 1280px) {
+@media (min-width: 769px) and (max-width: 1540px) {
   .migration-filter-panel {
     grid-template-columns: 1fr;
   }
 
   .migration-filter-grid {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+
+  .migration-filter-item-sku,
+  .migration-filter-item-date {
+    grid-column: span 2;
   }
 
   .migration-filter-actions {
