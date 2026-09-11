@@ -13,6 +13,8 @@ import RiskAssessment from './pages/RiskAssessment';
 import UserMigration from './pages/UserMigration';
 import UserMigrationCollect from './pages/UserMigrationCollect';
 import AiAssistant from './pages/AiAssistant';
+import Handover from './pages/Handover';
+import HandoverCollect from './pages/HandoverCollect';
 
 export default function App() {
   return (
@@ -33,6 +35,8 @@ export default function App() {
               <Route path="/recharges" element={<RechargeRecord />} />
               <Route path="/migration" element={<UserMigration />} />
               <Route path="/migration/collect" element={<UserMigrationCollect />} />
+              <Route path="/handover" element={<Handover />} />
+              <Route path="/handover/collect" element={<HandoverCollect />} />
               <Route path="/risk" element={<RiskAssessment />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

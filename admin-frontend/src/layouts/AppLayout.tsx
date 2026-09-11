@@ -6,7 +6,7 @@ import {
   SafetyOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined,
   UserOutlined, LogoutOutlined, UserSwitchOutlined,
-  DollarOutlined, HomeOutlined,
+  DollarOutlined, HomeOutlined, SolutionOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../store/authStore';
 
@@ -35,13 +35,15 @@ export default function AppLayout() {
     { key: '/consumption', icon: <BarChartOutlined />, label: '消耗监控' },
     { key: '/recharges', icon: <DollarOutlined />, label: '充值记录' },
     { key: '/migration', icon: <UserSwitchOutlined />, label: '用户迁移' },
+    { key: '/handover', icon: <SolutionOutlined />, label: '离职交接' },
     { key: '/risk', icon: <SafetyOutlined />, label: '主体风控' },
   ];
   const breadcrumbMap: Record<string, { label: string; icon: React.ReactNode }> = {};
   routes.forEach(r => { breadcrumbMap[r.key] = { label: r.label, icon: r.icon }; });
   breadcrumbMap['/migration/collect'] = { label: '信息采集', icon: <UserSwitchOutlined /> };
+  breadcrumbMap['/handover/collect'] = { label: '信息采集', icon: <SolutionOutlined /> };
   const pageInfo = breadcrumbMap[location.pathname] || { label: '页面', icon: null };
-  const selectedMenuKey = location.pathname.startsWith('/migration') ? '/migration' : location.pathname;
+  const selectedMenuKey = location.pathname.startsWith('/migration') ? '/migration' : location.pathname.startsWith('/handover') ? '/handover' : location.pathname;
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 768px)');
