@@ -22,9 +22,14 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (response) => response,
   (error) => {
+    if (error.response?.status === 403 && error.config?.headers?.['X-Entity-Access-Token']) {
+      sessionStorage.removeItem('entity_access_token');
+      window.dispatchEvent(new Event('entity-access-expired'));
+    }
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      sessionStorage.removeItem('entity_access_token');
       window.location.href = '/login';
     }
     return Promise.reject(error);

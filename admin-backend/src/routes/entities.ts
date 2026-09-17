@@ -1,4 +1,6 @@
 import { Router, Response } from 'express';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { syncEntityQuota } from '../services/sync';
@@ -6,8 +8,97 @@ import { syncEntityQuota } from '../services/sync';
 const router = Router();
 router.use(authMiddleware);
 
+interface EntityAccessPayload {
+  userId: number;
+  scope: 'entity-management';
+}
+
+function entityManagementOnly(req: AuthRequest, res: Response, next: () => void) {
+  const accessToken = req.headers['x-entity-access-token'];
+  if (typeof accessToken !== 'string') {
+    res.status(403).json({ error: '请先验证主体管理访问权限' });
+    return;
+  }
+
+  try {
+    const payload = jwt.verify(
+      accessToken,
+      process.env.JWT_SECRET || 'default-secret',
+    ) as EntityAccessPayload;
+
+    if (payload.scope !== 'entity-management' || payload.userId !== req.userId) {
+      throw new Error('Invalid entity access token');
+    }
+    next();
+  } catch {
+    res.status(403).json({ error: '主体管理授权已过期，请重新验证' });
+  }
+}
+
+// POST /api/entities/access - 主体管理专用账号验证
+router.post('/access', async (req: AuthRequest, res: Response) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      res.status(400).json({ error: '请输入账号和密码' });
+      return;
+    }
+
+    const managementUsername = process.env.ENTITY_MANAGEMENT_USERNAME;
+    const managementPasswordHash = process.env.ENTITY_MANAGEMENT_PASSWORD_HASH;
+    if (!managementUsername || !managementPasswordHash) {
+      res.status(503).json({ error: '主体管理专用账号尚未配置' });
+      return;
+    }
+
+    const isValid = username === managementUsername
+      && await bcrypt.compare(password, managementPasswordHash);
+
+    if (!isValid) {
+      res.status(403).json({ error: '账号或密码不正确' });
+      return;
+    }
+
+    const accessToken = jwt.sign(
+      { userId: req.userId, scope: 'entity-management' },
+      process.env.JWT_SECRET || 'default-secret',
+      { expiresIn: '2h' },
+    );
+    res.json({ accessToken, expiresIn: 2 * 60 * 60 });
+  } catch {
+    res.status(500).json({ error: '权限验证失败' });
+  }
+});
+
+// GET /api/entities/access - 校验当前专用权限
+router.get('/access', entityManagementOnly, (_req: AuthRequest, res: Response) => {
+  res.json({ valid: true });
+});
+
 // GET /api/entities
 router.get('/', async (_req: AuthRequest, res: Response) => {
+  try {
+    res.json(await prisma.wecomEntity.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        status: true,
+        quotaTotal: true,
+        quotaBalance: true,
+        lastSyncAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }));
+  } catch {
+    res.status(500).json({ error: '获取主体列表失败' });
+  }
+});
+
+// GET /api/entities/manage - 主体管理完整列表
+router.get('/manage', entityManagementOnly, async (_req: AuthRequest, res: Response) => {
   try {
     res.json(await prisma.wecomEntity.findMany({ orderBy: { createdAt: 'desc' } }));
   } catch {
@@ -16,7 +107,7 @@ router.get('/', async (_req: AuthRequest, res: Response) => {
 });
 
 // GET /api/entities/:id
-router.get('/:id', async (req: AuthRequest, res: Response) => {
+router.get('/:id', entityManagementOnly, async (req: AuthRequest, res: Response) => {
   try {
     const entity = await prisma.wecomEntity.findUnique({ where: { id: Number(req.params.id) } });
     if (!entity) return res.status(404).json({ error: '主体不存在' });
@@ -47,7 +138,7 @@ router.post('/:id/sync', async (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/entities
-router.post('/', async (req: AuthRequest, res: Response) => {
+router.post('/', entityManagementOnly, async (req: AuthRequest, res: Response) => {
   try {
     const { name, sku, corpid, secret, quotaTotal, rechargeAmount, monthlyBudget, wecomApiBaseUrl } = req.body;
     if (!name || !corpid || !secret) return res.status(400).json({ error: '名称、企业ID和Secret为必填项' });
@@ -67,7 +158,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 });
 
 // PUT /api/entities/:id
-router.put('/:id', async (req: AuthRequest, res: Response) => {
+router.put('/:id', entityManagementOnly, async (req: AuthRequest, res: Response) => {
   try {
     const { name, sku, rechargeAmount, monthlyBudget, corpid, secret, status, quotaTotal, wecomApiBaseUrl } = req.body;
     const id = Number(req.params.id);
@@ -87,7 +178,7 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 // DELETE /api/entities/:id
-router.delete('/:id', async (req: AuthRequest, res: Response) => {
+router.delete('/:id', entityManagementOnly, async (req: AuthRequest, res: Response) => {
   try {
     const id = Number(req.params.id);
     if (!(await prisma.wecomEntity.findUnique({ where: { id } }))) return res.status(404).json({ error: '主体不存在' });

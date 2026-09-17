@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Table, Button, Modal, Form, Input, Space, Tag, message } from 'antd';
 import { PlusOutlined, ReloadOutlined, SyncOutlined, TeamOutlined } from '@ant-design/icons';
-import { getEntities, createEntity, updateEntity, syncEntity, type WecomEntity, type EntityFormData } from '../api/entities';
+import { getManagedEntities, createEntity, updateEntity, syncEntity, type WecomEntity, type EntityFormData } from '../api/entities';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 
@@ -13,7 +13,7 @@ export default function EntityManage() {
   const [submitting, setSubmitting] = useState(false);
   const [form] = Form.useForm();
 
-  const fetchData = () => { setLoading(true); getEntities().then(setEntities).finally(() => setLoading(false)); };
+  const fetchData = () => { setLoading(true); getManagedEntities().then(setEntities).finally(() => setLoading(false)); };
   useEffect(() => { fetchData(); }, []);
 
   const handleCreate = () => { setEditingId(null); form.resetFields(); setModalOpen(true); };

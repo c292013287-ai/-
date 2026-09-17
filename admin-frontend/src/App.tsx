@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, App as AntApp } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import AuthGuard from './components/AuthGuard';
+import EntityAccessGuard from './components/EntityAccessGuard';
 import AppLayout from './layouts/AppLayout';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -59,7 +60,7 @@ export default function App() {
             <Route element={<AuthGuard><AppLayout /></AuthGuard>}>
               <Route path="/" element={<Home />} />
               <Route path="/warnings" element={<Dashboard />} />
-              <Route path="/entities" element={<EntityManage />} />
+              <Route path="/entities" element={<EntityAccessGuard><EntityManage /></EntityAccessGuard>} />
               <Route path="/consumption" element={<ConsumptionMonitor />} />
               <Route path="/recharges" element={<RechargeRecord />} />
               <Route path="/migration" element={<UserMigration />} />
