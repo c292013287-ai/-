@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Table, Button, Modal, Form, Input, Space, Tag, message } from 'antd';
-import { PlusOutlined, ReloadOutlined, SyncOutlined, TeamOutlined } from '@ant-design/icons';
-import { getManagedEntities, createEntity, updateEntity, syncEntity, type WecomEntity, type EntityFormData } from '../api/entities';
+import { Table, Button, Modal, Form, Input, Space, Tag, Popconfirm, message } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SyncOutlined, TeamOutlined } from '@ant-design/icons';
+import { getManagedEntities, createEntity, updateEntity, deleteEntity, syncEntity, type WecomEntity, type EntityFormData } from '../api/entities';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 
@@ -11,12 +11,38 @@ export default function EntityManage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [form] = Form.useForm();
 
   const fetchData = () => { setLoading(true); getManagedEntities().then(setEntities).finally(() => setLoading(false)); };
   useEffect(() => { fetchData(); }, []);
 
   const handleCreate = () => { setEditingId(null); form.resetFields(); setModalOpen(true); };
+
+  const handleEdit = (entity: WecomEntity) => {
+    setEditingId(entity.id);
+    form.setFieldsValue({
+      name: entity.name,
+      sku: entity.sku,
+      corpid: entity.corpid,
+      secret: entity.secret,
+      wecomApiBaseUrl: entity.wecomApiBaseUrl,
+    });
+    setModalOpen(true);
+  };
+
+  const handleDelete = async (entity: WecomEntity) => {
+    setDeletingId(entity.id);
+    try {
+      await deleteEntity(entity.id);
+      message.success(`「${entity.name}」已删除`);
+      fetchData();
+    } catch (error: any) {
+      message.error(error.response?.data?.error || '删除失败');
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   const handleSync = async (id: number, name: string) => {
     message.loading({ content: `正在同步「${name}」...`, key: 'sync' });
@@ -56,10 +82,21 @@ export default function EntityManage() {
     { title: '获客助手余额', dataIndex: 'quotaBalance', key: 'quotaBalance', width: 120,
       render: (v: number) => <span style={{ color: v < 5000 ? '#ff4d4f' : '#52c41a', fontWeight: v < 5000 ? 600 : 400 }}>{v.toLocaleString()}</span> },
     { title: '最后同步', dataIndex: 'lastSyncAt', key: 'lastSyncAt', width: 170, render: (v: string | null) => v ? new Date(v).toLocaleString() : '-' },
-    { title: '操作', key: 'action', width: 180,
+    { title: '操作', key: 'action', width: 260, fixed: 'right' as const,
       render: (_: any, r: WecomEntity) => (
-        <Space>
+        <Space size={6}>
           <Button size="small" icon={<SyncOutlined />} onClick={() => handleSync(r.id, r.name)}>同步</Button>
+          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>
+          <Popconfirm
+            title="确认删除主体？"
+            description={`删除「${r.name}」后无法恢复，关联记录也会一并删除。`}
+            okText="确认删除"
+            cancelText="取消"
+            okButtonProps={{ danger: true }}
+            onConfirm={() => handleDelete(r)}
+          >
+            <Button danger size="small" icon={<DeleteOutlined />} loading={deletingId === r.id}>删除</Button>
+          </Popconfirm>
         </Space>
       )},
   ];
@@ -74,7 +111,7 @@ export default function EntityManage() {
         <StatCard title="启用中" value={activeCount} suffix="个" gradient="blue" color="#1890ff" />
       </div>
 
-      <Table dataSource={entities} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 1150 }}
+      <Table dataSource={entities} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 1300 }}
         pagination={{ pageSize: 20, showTotal: (t: number) => `共 ${t} 个主体` }} />
 
       <Modal title={editingId ? '编辑主体' : '添加主体'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} confirmLoading={submitting} destroyOnClose width={480}>
