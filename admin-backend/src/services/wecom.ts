@@ -1,4 +1,6 @@
 import axios from 'axios';
+import { countServedUsers } from '../lib/servedUserCount';
+import type { ServedUserProgress } from '../lib/servedUserCount';
 
 const WECOM_API_BASE = process.env.WECOM_API_BASE || 'https://qyapi.weixin.qq.com';
 
@@ -26,6 +28,7 @@ async function getAccessToken(corpid: string, secret: string, apiBaseUrl?: strin
 
   const res = await axios.get(`${baseUrl}/cgi-bin/gettoken`, {
     params: { corpid, corpsecret: secret },
+    timeout: 15000,
   });
 
   if (res.data.errcode !== 0) {
@@ -38,6 +41,22 @@ async function getAccessToken(corpid: string, secret: string, apiBaseUrl?: strin
   };
 
   return res.data.access_token;
+}
+
+export async function getServedUserCount(corpid: string, secret: string, apiBaseUrl?: string | null, onProgress?: (progress: ServedUserProgress) => void) {
+  try {
+    const baseUrl = normalizeApiBaseUrl(apiBaseUrl);
+    return await countServedUsers(async cursor => {
+      const token = await getAccessToken(corpid, secret, baseUrl);
+      const { data } = await axios.post(`${baseUrl}/cgi-bin/externalcontact/contact_list`,
+        { cursor, limit: 1000 }, { params: { access_token: token }, timeout: 15000 });
+      return data;
+    }, onProgress);
+  } catch (error) {
+    // Axios errors may contain access tokens in request URLs.
+    if (axios.isAxiosError(error)) throw new Error('企业微信连接失败或请求超时，请检查同步出口');
+    throw error;
+  }
 }
 
 // 获客助手 - 获取获客链接列表

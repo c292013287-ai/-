@@ -81,6 +81,8 @@ log "备份当前本地数据库"
   > "$local_before_file"
 
 log "开始恢复到本地数据库"
+local_fields_file="$BACKUP_DIR/local_entity_fields_$timestamp.json"
+node "$PROJECT_DIR/scripts/local-entity-fields.cjs" snapshot "$local_fields_file"
 "$DOCKER_BIN" compose -f "$PROJECT_DIR/docker-compose.yml" exec -T mysql \
   mysql -u"$LOCAL_MYSQL_USER" -p"$LOCAL_MYSQL_PASSWORD" \
   -e "DROP DATABASE IF EXISTS \`$LOCAL_DB\`; CREATE DATABASE \`$LOCAL_DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
@@ -89,6 +91,7 @@ log "开始恢复到本地数据库"
   mysql -u"$LOCAL_MYSQL_USER" -p"$LOCAL_MYSQL_PASSWORD" "$LOCAL_DB" \
   < "$backup_file"
 
+node "$PROJECT_DIR/scripts/local-entity-fields.cjs" restore "$local_fields_file"
 log "本地数据库已同步为线上数据"
 log "开始清理 $RETENTION_DAYS 天前的旧备份"
 find "$BACKUP_DIR" -type f \( -name 'prod_resource_admin_*.sql' -o -name 'local_before_restore_*.sql' \) -mtime +"$RETENTION_DAYS" -delete

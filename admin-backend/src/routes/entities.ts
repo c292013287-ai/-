@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { syncEntityQuota } from '../services/sync';
+import { parseCertificationDate } from '../lib/certificationDate';
+import { servedUserJobs } from '../services/servedUserJobs';
 
 const router = Router();
 router.use(authMiddleware);
@@ -106,6 +108,10 @@ router.get('/manage', entityManagementOnly, async (_req: AuthRequest, res: Respo
   }
 });
 
+router.get('/served-users/jobs', entityManagementOnly, (_req: AuthRequest, res: Response) => {
+  res.json(servedUserJobs.list());
+});
+
 // GET /api/entities/:id
 router.get('/:id', entityManagementOnly, async (req: AuthRequest, res: Response) => {
   try {
@@ -118,6 +124,18 @@ router.get('/:id', entityManagementOnly, async (req: AuthRequest, res: Response)
 });
 
 // POST /api/entities/:id/sync
+router.post('/:id/served-users/sync', entityManagementOnly, async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ error: '主体ID无效' });
+  try {
+    const entity = await prisma.wecomEntity.findUnique({ where: { id } });
+    if (!entity) return res.status(404).json({ error: '主体不存在' });
+    res.status(202).json(servedUserJobs.start(id));
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error && !('code' in error) ? error.message : '统计失败，请稍后重试' });
+  }
+});
+
 router.post('/:id/sync', async (req: AuthRequest, res: Response) => {
   try {
     const entity = await prisma.wecomEntity.findUnique({ where: { id: Number(req.params.id) } });
@@ -139,6 +157,9 @@ router.post('/:id/sync', async (req: AuthRequest, res: Response) => {
 
 // POST /api/entities
 router.post('/', entityManagementOnly, async (req: AuthRequest, res: Response) => {
+  let certificationExpiresAt;
+  try { certificationExpiresAt = parseCertificationDate(req.body.certificationExpiresAt); }
+  catch (error) { return res.status(400).json({ error: (error as Error).message }); }
   try {
     const { name, sku, corpid, secret, quotaTotal, rechargeAmount, monthlyBudget, wecomApiBaseUrl } = req.body;
     if (!name || !corpid || !secret) return res.status(400).json({ error: '名称、企业ID和Secret为必填项' });
@@ -146,6 +167,7 @@ router.post('/', entityManagementOnly, async (req: AuthRequest, res: Response) =
     res.status(201).json(await prisma.wecomEntity.create({
       data: {
         name, sku: sku || null, corpid, secret, wecomApiBaseUrl: wecomApiBaseUrl || null,
+        certificationExpiresAt,
         rechargeAmount: Number(rechargeAmount || 0),
         monthlyBudget: Number(monthlyBudget || 0),
         quotaTotal: Number(quotaTotal || 0),
@@ -159,12 +181,16 @@ router.post('/', entityManagementOnly, async (req: AuthRequest, res: Response) =
 
 // PUT /api/entities/:id
 router.put('/:id', entityManagementOnly, async (req: AuthRequest, res: Response) => {
+  let certificationExpiresAt;
+  try { certificationExpiresAt = parseCertificationDate(req.body.certificationExpiresAt); }
+  catch (error) { return res.status(400).json({ error: (error as Error).message }); }
   try {
     const { name, sku, rechargeAmount, monthlyBudget, corpid, secret, status, quotaTotal, wecomApiBaseUrl } = req.body;
     const id = Number(req.params.id);
     if (!(await prisma.wecomEntity.findUnique({ where: { id } }))) return res.status(404).json({ error: '主体不存在' });
 
     const data: any = { name, sku, corpid, secret, status };
+    if (certificationExpiresAt !== undefined) data.certificationExpiresAt = certificationExpiresAt;
     if (wecomApiBaseUrl !== undefined) data.wecomApiBaseUrl = wecomApiBaseUrl || null;
     if (rechargeAmount !== undefined) data.rechargeAmount = Number(rechargeAmount);
     if (monthlyBudget !== undefined) data.monthlyBudget = Number(monthlyBudget);

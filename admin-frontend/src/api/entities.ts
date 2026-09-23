@@ -13,11 +13,15 @@ export interface WecomEntity {
   quotaTotal: number;
   quotaBalance: number;
   lastSyncAt: string | null;
+  certificationExpiresAt?: string | null;
+  servedUserCount?: number | null;
+  servedUserCountUpdatedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface EntityFormData {
+  certificationExpiresAt?: string | null;
   name: string;
   sku?: string;
   rechargeAmount?: number;
@@ -72,6 +76,30 @@ export async function checkEntityManagementAccess(): Promise<boolean> {
 
 export async function getManagedEntities(): Promise<WecomEntity[]> {
   const { data } = await client.get('/entities/manage', { headers: entityAccessHeaders() });
+  return data;
+}
+
+export interface ServedUserJob {
+  entityId: number;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  pages: number;
+  rows: number;
+  uniqueUsers: number;
+  startedAt: string;
+  finishedAt?: string;
+  error?: string;
+  result?: { servedUserCount: number; servedUserCountUpdatedAt: string };
+}
+
+export async function getServedUserJobs(): Promise<ServedUserJob[]> {
+  const { data } = await client.get('/entities/served-users/jobs', { headers: entityAccessHeaders() });
+  return data;
+}
+
+export async function syncServedUsers(id: number) {
+  const { data } = await client.post<ServedUserJob>(
+    `/entities/${id}/served-users/sync`, undefined, { headers: entityAccessHeaders() },
+  );
   return data;
 }
 
