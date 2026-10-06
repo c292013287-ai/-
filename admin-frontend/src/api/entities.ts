@@ -12,6 +12,7 @@ export interface WecomEntity {
   status: string;
   quotaTotal: number;
   quotaBalance: number;
+  userCount: number;
   lastSyncAt: string | null;
   certificationExpiresAt?: string | null;
   servedUserCount?: number | null;
@@ -121,6 +122,7 @@ export interface SyncResult {
   success: boolean;
   quotaTotal: number;
   quotaBalance: number;
+  userCount?: number;
   consumption: number;
   quotaList: Array<{ expireDate: number; balance: number }>;
 }

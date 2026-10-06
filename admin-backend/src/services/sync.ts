@@ -4,7 +4,7 @@
  */
 import prisma from '../lib/prisma';
 import { startOfDay, fmtDate } from '../lib/date';
-import { getQuotaInfo } from './wecom';
+import { getEntityUserCount, getQuotaInfo } from './wecom';
 import { buildRechargeMap } from '../lib/recharge';
 
 interface SyncParams {
@@ -21,11 +21,22 @@ export async function syncEntityQuota(params: SyncParams) {
   const utcToday = new Date(fmtDate(today));
 
   const quota = await getQuotaInfo(entity.corpid, entity.secret, entity.wecomApiBaseUrl);
+  let userCount: number | undefined;
+  try {
+    userCount = await getEntityUserCount(entity.corpid, entity.secret, entity.wecomApiBaseUrl);
+  } catch (error: any) {
+    console.warn(`主体「${entity.name}」用户总数同步失败: ${error.message}`);
+  }
 
-  // 更新主体配额
+  // 更新主体配额；人数接口失败时保留旧值，避免影响余额同步。
   await prisma.wecomEntity.update({
     where: { id: entity.id },
-    data: { quotaTotal: quota.total, quotaBalance: quota.balance, lastSyncAt: new Date() },
+    data: {
+      quotaTotal: quota.total,
+      quotaBalance: quota.balance,
+      ...(userCount !== undefined ? { userCount } : {}),
+      lastSyncAt: new Date(),
+    },
   });
 
   // 计算消耗（范围查询昨日，兼容新旧记录时区）
@@ -69,5 +80,5 @@ export async function syncEntityQuota(params: SyncParams) {
     },
   });
 
-  return { quota, consumption };
+  return { quota, consumption, userCount };
 }

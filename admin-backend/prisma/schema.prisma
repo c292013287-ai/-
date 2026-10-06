@@ -32,6 +32,7 @@ model WecomEntity {
   status         String    @default("active")
   quotaTotal     Int       @default(0) @map("quota_total")
   quotaBalance   Int       @default(0) @map("quota_balance")
+  userCount      Int       @default(0) @map("user_count")
   lastSyncAt     DateTime? @map("last_sync_at")
   certificationExpiresAt DateTime? @db.Date @map("certification_expires_at")
   servedUserCount Int? @map("served_user_count")

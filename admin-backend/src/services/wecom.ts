@@ -142,6 +142,22 @@ export async function getQuotaInfo(corpid: string, secret: string, apiBaseUrl?: 
   };
 }
 
+// 客户联系 - 获取当前应用可见范围内的主体成员总数
+export async function getEntityUserCount(corpid: string, secret: string, apiBaseUrl?: string | null): Promise<number> {
+  const baseUrl = normalizeApiBaseUrl(apiBaseUrl);
+  const token = await getAccessToken(corpid, secret, baseUrl);
+  const res = await axios.get(
+    `${baseUrl}/cgi-bin/externalcontact/get_follow_user_list`,
+    { params: { access_token: token } },
+  );
+
+  if (res.data.errcode !== 0) {
+    throw new Error(`获取主体用户总数失败: ${res.data.errmsg}`);
+  }
+
+  return new Set<string>(res.data.follow_user || []).size;
+}
+
 // 获客助手 - 获取剩余使用量 (仅返回配额余额)
 export async function getQuotaBalance(corpid: string, secret: string, apiBaseUrl?: string | null): Promise<{
   total: number;

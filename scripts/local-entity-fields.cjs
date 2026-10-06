@@ -5,6 +5,7 @@ require(path.join(backend, 'node_modules/dotenv')).config({ path: path.join(back
 const { PrismaClient } = require(path.join(backend, 'node_modules/@prisma/client'));
 const prisma = new PrismaClient();
 const fields = {
+  user_count: 'INTEGER NOT NULL DEFAULT 0',
   certification_expires_at: 'DATE NULL',
   served_user_count: 'INTEGER NULL',
   served_user_count_updated_at: 'DATETIME(3) NULL',
@@ -35,7 +36,7 @@ async function main() {
   for (const row of rows) {
     for (const field of missing) {
       if (row[field] == null) continue;
-      const value = field === 'served_user_count' ? row[field] : new Date(row[field]);
+      const value = ['user_count', 'served_user_count'].includes(field) ? row[field] : new Date(row[field]);
       await prisma.$executeRawUnsafe(`UPDATE wecom_entities SET ${field} = ? WHERE corpid = ?`, value, row.corpid);
     }
   }

@@ -142,6 +142,8 @@ export default function EntityManage() {
       render: (s: string) => <Tag color={s === 'active' ? 'green' : 'orange'}>{s === 'active' ? '启用' : '停用'}</Tag> },
     { title: '获客助手余额', dataIndex: 'quotaBalance', key: 'quotaBalance', width: 120,
       render: (v: number) => <span style={{ color: v < 5000 ? '#ff4d4f' : '#52c41a', fontWeight: v < 5000 ? 600 : 400 }}>{v.toLocaleString()}</span> },
+    { title: '主体用户总数', dataIndex: 'userCount', key: 'userCount', width: 120, align: 'center' as const,
+      render: (v: number) => <span style={{ fontWeight: 600 }}>{(v || 0).toLocaleString()}</span> },
     { title: '最后同步', dataIndex: 'lastSyncAt', key: 'lastSyncAt', width: 170, render: (v: string | null) => v ? new Date(v).toLocaleString() : '-' },
     { title: '认证到期日', dataIndex: 'certificationExpiresAt', key: 'certificationExpiresAt', width: 220,
       sorter: (a: WecomEntity, b: WecomEntity) => (a.certificationExpiresAt || '9999').localeCompare(b.certificationExpiresAt || '9999'),
@@ -207,7 +209,7 @@ export default function EntityManage() {
         style={{ marginBottom: 16 }} message={`认证到期预警：${expiryAlerts.length} 个主体需关注`}
         description={<Space wrap>{expiryAlerts.map(({ entity, label, color }) => <Tag key={entity.id} color={color}>{entity.name}：{label}</Tag>)}</Space>} />}
 
-      <Table dataSource={entities} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 2120 }}
+      <Table dataSource={entities} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 2240 }}
         pagination={{ pageSize: 20, showTotal: (t: number) => `共 ${t} 个主体` }} />
 
       <Modal title={editingId ? '编辑主体' : '添加主体'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} confirmLoading={submitting} destroyOnClose width={480}>

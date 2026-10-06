@@ -89,6 +89,7 @@ router.get('/', async (_req: AuthRequest, res: Response) => {
         status: true,
         quotaTotal: true,
         quotaBalance: true,
+        userCount: true,
         lastSyncAt: true,
         createdAt: true,
         updatedAt: true,
@@ -142,14 +143,14 @@ router.post('/:id/sync', async (req: AuthRequest, res: Response) => {
     if (!entity) return res.status(404).json({ error: '主体不存在' });
 
     const result = await syncEntityQuota({ entity });
-    const { quota, consumption } = result;
+    const { quota, consumption, userCount } = result;
 
     // 补充日志
     await prisma.syncLog.create({
       data: { entityId: entity.id, status: 'success', message: `手动同步: 配额${quota.total} 余额${quota.balance} 消耗${consumption}` },
     });
 
-    res.json({ success: true, quotaTotal: quota.total, quotaBalance: quota.balance, consumption, quotaList: quota.quotaList });
+    res.json({ success: true, quotaTotal: quota.total, quotaBalance: quota.balance, userCount, consumption, quotaList: quota.quotaList });
   } catch (error: any) {
     res.status(500).json({ error: `同步失败: ${error.message}` });
   }
