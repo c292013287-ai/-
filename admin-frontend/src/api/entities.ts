@@ -80,6 +80,34 @@ export async function getManagedEntities(): Promise<WecomEntity[]> {
   return data;
 }
 
+export interface Customer {
+  avatar?: string;
+  gender?: number;
+  remarkMobiles?: string[];
+  tags?: Array<{ id: string; name: string }>;
+  addWay?: number | null;
+  state?: string;
+  externalUserId: string;
+  unionId?: string;
+  name: string;
+  type: number;
+  company: string;
+  userId: string;
+  remark: string;
+  description: string;
+  addedAt: number | null;
+}
+
+export async function getCustomerFollowers(id: number): Promise<string[]> {
+  const { data } = await client.get(`/entities/${id}/customers`, { headers: entityAccessHeaders() });
+  return data.users;
+}
+
+export async function getCustomers(id: number, userId: string, cursor: string, signal?: AbortSignal): Promise<{ items: Customer[]; nextCursor: string; tagWarning?: string }> {
+  const { data } = await client.get(`/entities/${id}/customers`, { params: { userId, cursor }, headers: entityAccessHeaders(), signal });
+  return data;
+}
+
 export interface ServedUserJob {
   entityId: number;
   status: 'queued' | 'running' | 'completed' | 'failed';

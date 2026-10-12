@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { customerFields } from '../lib/customerFields';
 import { countServedUsers } from '../lib/servedUserCount';
 import type { ServedUserProgress } from '../lib/servedUserCount';
 
@@ -41,6 +42,59 @@ async function getAccessToken(corpid: string, secret: string, apiBaseUrl?: strin
   };
 
   return res.data.access_token;
+}
+
+export async function getCustomerPage(corpid: string, secret: string, apiBaseUrl: string | null | undefined, userId?: string, cursor = '') {
+  try {
+    const baseUrl = normalizeApiBaseUrl(apiBaseUrl);
+    const token = await getAccessToken(corpid, secret, baseUrl);
+    const options = { params: { access_token: token }, timeout: 15000 };
+    const { data } = userId
+      ? await axios.post(`${baseUrl}/cgi-bin/externalcontact/batch/get_by_user`, { userid_list: [userId], cursor, limit: 100 }, options)
+      : await axios.get(`${baseUrl}/cgi-bin/externalcontact/get_follow_user_list`, options);
+    if (data.errcode !== 0) throw new Error(`企业微信错误码 ${data.errcode}，请检查客户联系权限及可信 IP`);
+    if (!userId) {
+      if (!Array.isArray(data.follow_user) || !data.follow_user.every((id: unknown) => typeof id === 'string')) throw new Error('成员列表数据不完整');
+      return { users: data.follow_user as string[] };
+    }
+    if (!Array.isArray(data.external_contact_list)) throw new Error('客户列表数据不完整');
+    if (data.next_cursor != null && typeof data.next_cursor !== 'string') throw new Error('客户分页游标无效');
+    const text = (value: unknown) => typeof value === 'string' ? value : '';
+    const items = data.external_contact_list.map((item: any) => {
+      const contact = item.external_contact;
+      const follow = item.follow_info;
+      if (!contact || typeof contact.external_userid !== 'string' || !follow) throw new Error('客户详情数据不完整');
+      return {
+        ...customerFields(contact, follow),
+        externalUserId: contact.external_userid, unionId: text(contact.unionid), name: text(contact.name),
+        type: contact.type, company: text(contact.corp_full_name || contact.corp_name),
+        userId: text(follow.userid), remark: text(follow.remark), description: text(follow.description),
+        addedAt: typeof follow.createtime === 'number' ? follow.createtime : null,
+      };
+    });
+    let tagWarning = '';
+    if (items.some((item: { tags: unknown[] }) => item.tags.length)) {
+      try {
+        const { data: tagData } = await axios.post(`${baseUrl}/cgi-bin/externalcontact/get_corp_tag_list`, {}, { ...options, timeout: 5000 });
+        if (tagData.errcode !== 0 || !Array.isArray(tagData.tag_group)) throw new Error('Tag lookup failed');
+        const names = new Map<string, string>();
+        for (const group of tagData.tag_group) {
+          if (group.deleted || !Array.isArray(group.tag)) continue;
+          for (const tag of group.tag) {
+            if (!tag.deleted && typeof tag.id === 'string' && typeof tag.name === 'string') names.set(tag.id, tag.name);
+          }
+        }
+        for (const item of items) for (const tag of item.tags) tag.name = names.get(tag.id) || '';
+        if (items.some((item: { tags: Array<{ name: string }> }) => item.tags.some(tag => !tag.name))) tagWarning = '部分标签名称不可用，已保留标签ID';
+      } catch {
+        tagWarning = '标签名称获取失败，已保留标签ID';
+      }
+    }
+    return { items, nextCursor: data.next_cursor || '', tagWarning };
+  } catch (error) {
+    if (axios.isAxiosError(error)) throw new Error('企业微信连接失败，请检查同步出口后重试');
+    throw error;
+  }
 }
 
 export async function getServedUserCount(corpid: string, secret: string, apiBaseUrl?: string | null, onProgress?: (progress: ServedUserProgress) => void) {

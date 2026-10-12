@@ -6,6 +6,7 @@ import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { syncEntityQuota } from '../services/sync';
 import { parseCertificationDate } from '../lib/certificationDate';
 import { servedUserJobs } from '../services/servedUserJobs';
+import { getCustomerPage } from '../services/wecom';
 
 const router = Router();
 router.use(authMiddleware);
@@ -111,6 +112,23 @@ router.get('/manage', entityManagementOnly, async (_req: AuthRequest, res: Respo
 
 router.get('/served-users/jobs', entityManagementOnly, (_req: AuthRequest, res: Response) => {
   res.json(servedUserJobs.list());
+});
+
+router.get('/:id/customers', entityManagementOnly, async (req: AuthRequest, res: Response) => {
+  const id = Number(req.params.id);
+  const { userId, cursor } = req.query;
+  if (!Number.isSafeInteger(id) || id <= 0
+    || (userId !== undefined && (typeof userId !== 'string' || !userId.trim() || userId.length > 256))
+    || (cursor !== undefined && (typeof cursor !== 'string' || cursor.length > 4096 || !userId))) {
+    return res.status(400).json({ error: '客户查询参数无效' });
+  }
+  try {
+    const entity = await prisma.wecomEntity.findUnique({ where: { id } });
+    if (!entity) return res.status(404).json({ error: '主体不存在' });
+    res.json(await getCustomerPage(entity.corpid, entity.secret, entity.wecomApiBaseUrl, userId as string | undefined, cursor as string | undefined));
+  } catch (error) {
+    res.status(502).json({ error: error instanceof Error && !('code' in error) ? error.message : '客户查询失败，请重试' });
+  }
 });
 
 // GET /api/entities/:id

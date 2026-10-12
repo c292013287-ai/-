@@ -27,6 +27,7 @@ export default function AppLayout() {
   const routes = [
     { key: '/', icon: <HomeOutlined />, label: '首页' },
     { key: '/entities', icon: <TeamOutlined />, label: '主体管理' },
+    { key: '/customers', icon: <UserOutlined />, label: '用户管理' },
     { key: '/warnings', icon: <DashboardOutlined />, label: '资源预警' },
     { key: '/consumption', icon: <BarChartOutlined />, label: '消耗监控' },
     { key: '/recharges', icon: <DollarOutlined />, label: '充值记录' },

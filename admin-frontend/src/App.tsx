@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import Home from './pages/Home';
 import Dashboard from './pages/Dashboard';
 import EntityManage from './pages/EntityManage';
+import CustomerManage from './pages/CustomerManage';
 import ConsumptionMonitor from './pages/ConsumptionMonitor';
 import RechargeRecord from './pages/RechargeRecord';
 import UserMigration from './pages/UserMigration';
@@ -61,6 +62,7 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/warnings" element={<Dashboard />} />
               <Route path="/entities" element={<EntityAccessGuard><EntityManage /></EntityAccessGuard>} />
+              <Route path="/customers" element={<EntityAccessGuard title="用户管理"><CustomerManage /></EntityAccessGuard>} />
               <Route path="/consumption" element={<ConsumptionMonitor />} />
               <Route path="/recharges" element={<RechargeRecord />} />
               <Route path="/migration" element={<UserMigration />} />

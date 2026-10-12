@@ -8,7 +8,7 @@ import {
 
 const { Title, Text } = Typography;
 
-export default function EntityAccessGuard({ children }: { children: React.ReactNode }) {
+export default function EntityAccessGuard({ children, title = '主体管理' }: { children: React.ReactNode; title?: string }) {
   const [checking, setChecking] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -28,7 +28,7 @@ export default function EntityAccessGuard({ children }: { children: React.ReactN
     try {
       await unlockEntityManagement(values);
       setAuthorized(true);
-      message.success('主体管理权限验证成功');
+      message.success(`${title}权限验证成功`);
     } catch (error: any) {
       message.error(error.response?.data?.error || '权限验证失败');
     } finally {
@@ -51,7 +51,7 @@ export default function EntityAccessGuard({ children }: { children: React.ReactN
       <Card className="entity-access-card">
         <div className="entity-access-heading">
           <span className="entity-access-icon"><SafetyCertificateOutlined /></span>
-          <Title level={3}>主体管理访问验证</Title>
+          <Title level={3}>{title}访问验证</Title>
           <Text type="secondary">请输入主体管理专用账号和密码后继续</Text>
         </div>
         <Form layout="vertical" onFinish={handleUnlock} requiredMark={false}>
