@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Avatar, Button, DatePicker, Empty, Input, Select, Space, Table, Tag, Tooltip } from 'antd';
-import { ReloadOutlined, SearchOutlined, StopOutlined, UserOutlined } from '@ant-design/icons';
+import { Alert, Avatar, Button, DatePicker, Empty, Input, Select, Space, Table, Tag, Tooltip, message } from 'antd';
+import { DownloadOutlined, ReloadOutlined, SearchOutlined, StopOutlined, UserOutlined } from '@ant-design/icons';
+import { writeFile } from 'xlsx';
+import { buildCustomerWorkbook } from './customerExport';
 import dayjs from 'dayjs';
 import PageHeader from '../components/PageHeader';
 import { useAuthStore } from '../store/authStore';
@@ -10,7 +12,7 @@ import { getEntities, getCustomerFollowers, getCustomers, type Customer, type We
 
 const errorText = (error: unknown) => (error as { response?: { data?: { error?: string } } })?.response?.data?.error || (error instanceof Error ? error.message : '加载失败，请重试');
 
-function CustomerList({ entityId, ownerId }: { entityId: number; ownerId: number }) {
+function CustomerList({ entityId, entityName, ownerId }: { entityId: number; entityName: string; ownerId: number }) {
   const preferenceKey = `customer-selection:${ownerId}:${entityId}`;
   const [users, setUsers] = useState<string[]>([]);
   const [userId, setUserId] = useState<string | undefined>(() => readCustomerPreference(preferenceKey).userId);
@@ -30,6 +32,7 @@ function CustomerList({ entityId, ownerId }: { entityId: number; ownerId: number
   const [cancelled, setCancelled] = useState(false);
   const [progress, setProgress] = useState<CustomerQueryProgress>();
   const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
   useEffect(() => { writeCustomerPreference(preferenceKey, { scope, userId }); }, [preferenceKey, scope, userId]);
@@ -81,6 +84,19 @@ function CustomerList({ entityId, ownerId }: { entityId: number; ownerId: number
     } finally { if (controller.current === current) setLoading(false); }
   };
   const filteredItems = useMemo(() => items.filter(item => matchesCustomer(item, filters)), [items, filters]);
+  const download = () => {
+    if (!completed || loading || cacheLoading || !filteredItems.length || exporting) return;
+    setExporting(true);
+    try {
+      const workbook = buildCustomerWorkbook(filteredItems, {
+        entityName, scope: scope === 'entity' ? '整个主体' : `当前员工：${userId}`, updatedAt, filters, sourceLabel: customerSource,
+      });
+      const safeName = entityName.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 60);
+      writeFile(workbook, `用户管理_${safeName}_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
+      message.success(`已导出 ${filteredItems.length} 条客户跟进关系`);
+    } catch { message.error('下载失败，请重试或缩小筛选范围'); }
+    finally { setExporting(false); }
+  };
   const tags = useMemo(() => {
     const result = new Map<string, string>();
     items.forEach(item => item.tags?.forEach(tag => result.set(tag.id, tag.name || tag.id)));
@@ -116,6 +132,7 @@ function CustomerList({ entityId, ownerId }: { entityId: number; ownerId: number
       <Button type="primary" icon={completed ? <ReloadOutlined /> : <SearchOutlined />} disabled={cacheLoading || membersLoading || !!memberError || !users.length || loading} onClick={query}>{completed ? '刷新数据' : '查询客户'}</Button>
       {loading && <Button icon={<StopOutlined />} onClick={() => controller.current?.abort()}>取消查询</Button>}
       <Button icon={<ReloadOutlined />} onClick={() => { setFilters({}); setPage(1); }}>重置筛选</Button>
+      <Button icon={<DownloadOutlined />} loading={exporting} disabled={!completed || loading || cacheLoading || !filteredItems.length} onClick={download}>下载 Excel</Button>
     </div>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 12, marginBottom: 16 }}>
       {([
@@ -186,6 +203,6 @@ export default function CustomerManage() {
         onChange={value => { setEntityId(value); writeCustomerPreference(preferenceKey, { entityId: value }); }} placeholder="选择主体" style={{ width: 300, maxWidth: '100%' }}
         options={entities.map(entity => ({ value: entity.id, label: entity.name }))} />
     </div>
-    {entityId && ownerId != null ? <CustomerList key={`${ownerId}:${entityId}`} entityId={entityId} ownerId={ownerId} /> : !loading && !error && <Empty description="暂无主体" />}
+    {entityId && ownerId != null ? <CustomerList key={`${ownerId}:${entityId}`} entityId={entityId} entityName={entities.find(entity => entity.id === entityId)?.name || String(entityId)} ownerId={ownerId} /> : !loading && !error && <Empty description="暂无主体" />}
   </div>;
 }
