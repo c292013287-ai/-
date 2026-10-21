@@ -6,7 +6,6 @@ export const MIGRATION_STORAGE_KEY = 'resource-admin-user-migration-records';
 export const DELETED_MIGRATION_SOURCE_IDS_KEY = 'resource-admin-deleted-migration-source-ids';
 export const FEISHU_FORM_LINK_KEY = 'resource-admin-user-migration-feishu-form-link';
 export const FEISHU_FORM_CONFIG_KEY = 'resource-admin-user-migration-feishu-form-config';
-export const MANUAL_MIGRATION_FIELD_KEYS = ['转量数量', '处理人'];
 const EMPTY_MIGRATION_STAT_VALUES = new Set(['', '-', '未分配', '待分配']);
 
 export type MigrationCategory = '高价值' | '活跃用户' | '沉默用户' | '待确认';
@@ -288,34 +287,8 @@ export function mergeMigrationRecords(currentRecords: MigrationRecord[], incomin
   const visibleIncomingRecords = incomingRecords.filter(
     (record) => !record.sourceRecordId || !deletedSourceIds.has(record.sourceRecordId),
   );
-  const currentBySourceId = new Map(
-    currentRecords
-      .filter((record) => record.sourceRecordId)
-      .map((record) => [record.sourceRecordId, record]),
-  );
-  const mergedIncomingRecords = visibleIncomingRecords.map((incomingRecord) => {
-    const currentRecord = incomingRecord.sourceRecordId ? currentBySourceId.get(incomingRecord.sourceRecordId) : undefined;
-    if (!currentRecord) return incomingRecord;
-
-    const preservedManualFields = MANUAL_MIGRATION_FIELD_KEYS.reduce<Record<string, string>>((acc, key) => {
-      const currentValue = currentRecord.rawFields?.[key]?.trim();
-      if (currentValue) acc[key] = currentValue;
-      return acc;
-    }, {});
-
-    if (Object.keys(preservedManualFields).length === 0) return incomingRecord;
-
-    return {
-      ...incomingRecord,
-      owner: preservedManualFields.处理人 || incomingRecord.owner,
-      rawFields: {
-        ...(incomingRecord.rawFields || {}),
-        ...preservedManualFields,
-      },
-    };
-  });
-
+  // Confirmed source values win over browser cache; unsaved form drafts live separately.
   const incomingIds = new Set(visibleIncomingRecords.map((record) => record.sourceRecordId).filter(Boolean));
   const preservedRecords = currentRecords.filter((record) => !record.sourceRecordId || !incomingIds.has(record.sourceRecordId));
-  return [...mergedIncomingRecords, ...preservedRecords];
+  return [...visibleIncomingRecords, ...preservedRecords];
 }

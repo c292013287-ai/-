@@ -6,6 +6,7 @@ import EntityAccessGuard from './components/EntityAccessGuard';
 import AppLayout from './layouts/AppLayout';
 import Login from './pages/Login';
 import Home from './pages/Home';
+import Workbench from './pages/Workbench';
 import Dashboard from './pages/Dashboard';
 import EntityManage from './pages/EntityManage';
 import CustomerManage from './pages/CustomerManage';
@@ -60,6 +61,7 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route element={<AuthGuard><AppLayout /></AuthGuard>}>
               <Route path="/" element={<Home />} />
+              <Route path="/workbench" element={<EntityAccessGuard title="我的工作台"><Workbench /></EntityAccessGuard>} />
               <Route path="/warnings" element={<Dashboard />} />
               <Route path="/entities" element={<EntityAccessGuard><EntityManage /></EntityAccessGuard>} />
               <Route path="/customers" element={<EntityAccessGuard title="用户管理"><CustomerManage /></EntityAccessGuard>} />

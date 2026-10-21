@@ -3,40 +3,20 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
+import { entityManagementOnly } from '../middleware/entityManagement';
 import { syncEntityQuota } from '../services/sync';
 import { parseCertificationDate } from '../lib/certificationDate';
 import { servedUserJobs } from '../services/servedUserJobs';
-import { getCustomerPage } from '../services/wecom';
+import { getCustomerPage, getEmployeeNames } from '../services/wecom';
+import { customerSyncJobs } from '../services/customerSyncJobs';
+import { customerLive } from '../services/customerLive';
+import { fingerprintOf } from '../lib/customerLiveStore';
+import { callbackConfig } from './customerCallbacks';
+import { csvCell } from '../lib/customerSnapshotStore';
+import { once } from 'node:events';
 
 const router = Router();
 router.use(authMiddleware);
-
-interface EntityAccessPayload {
-  userId: number;
-  scope: 'entity-management';
-}
-
-function entityManagementOnly(req: AuthRequest, res: Response, next: () => void) {
-  const accessToken = req.headers['x-entity-access-token'];
-  if (typeof accessToken !== 'string') {
-    res.status(403).json({ error: '请先验证主体管理访问权限' });
-    return;
-  }
-
-  try {
-    const payload = jwt.verify(
-      accessToken,
-      process.env.JWT_SECRET || 'default-secret',
-    ) as EntityAccessPayload;
-
-    if (payload.scope !== 'entity-management' || payload.userId !== req.userId) {
-      throw new Error('Invalid entity access token');
-    }
-    next();
-  } catch {
-    res.status(403).json({ error: '主体管理授权已过期，请重新验证' });
-  }
-}
 
 // POST /api/entities/access - 主体管理专用账号验证
 router.post('/access', async (req: AuthRequest, res: Response) => {
@@ -112,6 +92,93 @@ router.get('/manage', entityManagementOnly, async (_req: AuthRequest, res: Respo
 
 router.get('/served-users/jobs', entityManagementOnly, (_req: AuthRequest, res: Response) => {
   res.json(servedUserJobs.list());
+});
+
+router.get('/:id/customers/live-status', entityManagementOnly, async (req, res) => {
+  try {
+    const entity = await prisma.wecomEntity.findUnique({ where: { id: Number(req.params.id) } });
+    if (!entity) { res.status(404).json({ error: '主体不存在' }); return; }
+    res.json({ ...await customerLive.status(entity.id, fingerprintOf(entity)), callbackPrepared: !!await callbackConfig(entity.id) });
+  } catch { res.status(500).json({ error: '读取增量同步状态失败' }); }
+});
+
+router.get('/customers/jobs', entityManagementOnly, async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(await customerSyncJobs.status());
+});
+
+router.post('/customers/sync', entityManagementOnly, async (req, res) => {
+  const id = req.body?.entityId;
+  if (id !== undefined && (!Number.isSafeInteger(id) || id <= 0)) return res.status(400).json({ error: '主体ID无效' });
+  try {
+    const entities = await prisma.wecomEntity.findMany({ where: { status: 'active', ...(id === undefined ? {} : { id }) }, select: { id: true } });
+    if (!entities.length) return res.status(404).json({ error: '没有可同步的启用主体' });
+    res.status(202).json(await customerSyncJobs.start(entities.map(entity => entity.id)));
+  } catch { res.status(500).json({ error: '启动用户同步失败' }); }
+});
+
+const customerFilterKeys = ['userId', 'name', 'remark', 'phone', 'externalUserId', 'unionId', 'state', 'gender', 'type', 'tagId', 'addWay', 'unionStatus', 'startDate', 'endDate'];
+function snapshotFilters(query: Record<string, unknown>) {
+  const filters: Record<string, string> = {};
+  for (const key of customerFilterKeys) {
+    const value = query[key];
+    if (value === undefined || value === '') continue;
+    if (typeof value !== 'string' || value.length > 256) throw new Error('筛选参数无效');
+    if (['gender', 'type', 'addWay'].includes(key) && !/^\d+$/.test(value)) throw new Error('筛选参数无效');
+    if (['startDate', 'endDate'].includes(key) && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)))) throw new Error('日期无效');
+    filters[key] = value;
+  }
+  return filters;
+}
+
+router.get('/:id/customers/export', entityManagementOnly, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ error: '主体ID无效' });
+  let filters;
+  try { filters = snapshotFilters(req.query); } catch { return res.status(400).json({ error: '筛选参数无效' }); }
+  const controller = new AbortController();
+  res.on('close', () => controller.abort());
+  try {
+    const rows = await customerSyncJobs.exportRows(id, filters, controller.signal);
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="customers-${id}.csv"`);
+    res.write('\uFEFF' + ['客户名称', '头像链接', '性别', '客户备注', '备注手机号', '客户标签', '添加来源代码', '渠道标记', '类型', '企业', '员工ID', '添加时间', '描述', 'external_userid', 'unionid'].map(csvCell).join(',') + '\r\n');
+    for await (const item of rows) {
+      const line = [item.name, item.avatar, item.gender === 1 ? '男' : item.gender === 2 ? '女' : '未知', item.remark, item.remarkMobiles?.join('\n'), item.tags?.map((tag: any) => tag.name || tag.id).join('\n'), item.addWay, item.state, item.type === 1 ? '微信客户' : '企业微信客户', item.company, item.userId, item.addedAt == null ? '' : new Date(item.addedAt * 1000).toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai' }), item.description, item.externalUserId, item.unionId].map(csvCell).join(',') + '\r\n';
+      if (!res.write(line)) await once(res, 'drain', { signal: controller.signal });
+    }
+    res.end();
+  } catch {
+    if (res.headersSent) res.destroy();
+    else if (!res.destroyed) res.status(500).json({ error: '下载失败，请重试' });
+  }
+});
+
+router.get('/:id/customers/snapshot', entityManagementOnly, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ error: '主体ID无效' });
+  const page = Number(req.query.page || 1); const pageSize = Number(req.query.pageSize || 20);
+  if (!Number.isSafeInteger(page) || page < 1 || ![20, 50, 100].includes(pageSize)) return res.status(400).json({ error: '分页参数无效' });
+  let filters;
+  try { filters = snapshotFilters(req.query); } catch { return res.status(400).json({ error: '筛选参数无效' }); }
+  const controller = new AbortController(); res.on('close', () => controller.abort());
+  try {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(await customerSyncJobs.snapshot(id, filters, page, pageSize, controller.signal));
+  } catch { if (!res.destroyed) res.status(500).json({ error: '读取服务器用户数据失败' }); }
+});
+
+router.get('/:id/employee-names', entityManagementOnly, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isSafeInteger(id) || id <= 0) return res.status(400).json({ error: '主体ID无效' });
+  try {
+    const entity = await prisma.wecomEntity.findUnique({ where: { id } });
+    if (!entity) return res.status(404).json({ error: '主体不存在' });
+    const names = await getEmployeeNames(entity.corpid, entity.secret, entity.wecomApiBaseUrl);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ names });
+  } catch { res.status(502).json({ error: '员工名称读取失败，暂显示员工ID；请检查通讯录权限或稍后重试' }); }
 });
 
 router.get('/:id/customers', entityManagementOnly, async (req: AuthRequest, res: Response) => {

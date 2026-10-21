@@ -17,7 +17,44 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  workbenchNotes WorkbenchNote[]
+  workbenchTodos WorkbenchTodo[]
+
   @@map("users")
+}
+
+model WorkbenchNote {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  title     String   @db.VarChar(120)
+  content   String   @db.Text
+  pinned    Boolean  @default(false)
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@map("workbench_notes")
+}
+
+model WorkbenchTodo {
+  id          Int       @id @default(autoincrement())
+  userId      Int       @map("user_id")
+  title       String    @db.VarChar(200)
+  completed   Boolean   @default(false)
+  priority    String    @default("normal") @db.VarChar(20)
+  dueDate     DateTime? @db.Date @map("due_date")
+  completedAt DateTime? @map("completed_at")
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@map("workbench_todos")
 }
 
 model WecomEntity {

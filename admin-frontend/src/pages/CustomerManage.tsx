@@ -1,138 +1,134 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Avatar, Button, DatePicker, Empty, Input, Select, Space, Table, Tag, Tooltip, message } from 'antd';
-import { DownloadOutlined, ReloadOutlined, SearchOutlined, StopOutlined, UserOutlined } from '@ant-design/icons';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Avatar, Button, Collapse, DatePicker, Empty, Input, Select, Space, Table, Tag, Tooltip, message } from 'antd';
+import { DownloadOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons';
 import { writeFile } from 'xlsx';
 import { buildCustomerWorkbook } from './customerExport';
 import dayjs from 'dayjs';
 import PageHeader from '../components/PageHeader';
+import { employeeOptions } from './customerEmployees';
 import { useAuthStore } from '../store/authStore';
-import { customerCacheKey, readCustomerCache, writeCustomerCache, readCustomerPreference, writeCustomerPreference } from './customerCache';
-import { collectCustomers, customerSource, matchesCustomer, type CustomerFilters, type CustomerQueryProgress } from './customerQuery';
-import { getEntities, getCustomerFollowers, getCustomers, type Customer, type WecomEntity } from '../api/entities';
+import { readCustomerPreference, writeCustomerPreference } from './customerCache';
+import { customerSource, type CustomerFilters } from './customerQuery';
+import { getEntities, getEmployeeNames, getCustomerSnapshot, getCustomerLiveStatus, downloadCustomerCsv, getCustomerSyncJobs, startCustomerSync, type CustomerLiveStatus, type CustomerSyncJob, type Customer, type WecomEntity } from '../api/entities';
 
 const errorText = (error: unknown) => (error as { response?: { data?: { error?: string } } })?.response?.data?.error || (error instanceof Error ? error.message : '加载失败，请重试');
 
-function CustomerList({ entityId, entityName, ownerId }: { entityId: number; entityName: string; ownerId: number }) {
+function CustomerList({ entityId, entityName, ownerId, job, onSync }: { entityId: number; entityName: string; ownerId: number; job?: CustomerSyncJob; onSync: (id?: number) => Promise<void> }) {
   const preferenceKey = `customer-selection:${ownerId}:${entityId}`;
   const [users, setUsers] = useState<string[]>([]);
+  const [employeeNames, setEmployeeNames] = useState<Record<string, string>>({});
+  const [namesLoading, setNamesLoading] = useState(false);
+  const [namesError, setNamesError] = useState('');
+  const [namesVersion, setNamesVersion] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    setNamesLoading(true); setNamesError('');
+    getEmployeeNames(entityId, controller.signal).then(setEmployeeNames)
+      .catch(e => { if (!controller.signal.aborted) setNamesError(errorText(e)); })
+      .finally(() => { if (!controller.signal.aborted) setNamesLoading(false); });
+    return () => controller.abort();
+  }, [entityId, namesVersion]);
+  const employees = useMemo(() => employeeOptions(users, employeeNames), [users, employeeNames]);
   const [userId, setUserId] = useState<string | undefined>(() => readCustomerPreference(preferenceKey).userId);
-  const [membersLoading, setMembersLoading] = useState(true);
-  const [memberError, setMemberError] = useState('');
-  const [memberVersion, setMemberVersion] = useState(0);
   const [items, setItems] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(false);
+  const loading = job?.status === 'queued' || job?.status === 'running';
   const [error, setError] = useState('');
   const [tagWarning, setTagWarning] = useState('');
-  const [scope, setScope] = useState<'employee' | 'entity'>(() => readCustomerPreference(preferenceKey).scope === 'entity' ? 'entity' : 'employee');
+  const [scope, setScope] = useState<'employee' | 'entity'>(() => readCustomerPreference(preferenceKey).scope === 'employee' ? 'employee' : 'entity');
   const [cacheLoading, setCacheLoading] = useState(true);
-  const [cacheWarning, setCacheWarning] = useState('');
+  const [version, setVersion] = useState(0);
   const [updatedAt, setUpdatedAt] = useState('');
+  const [fullUpdatedAt, setFullUpdatedAt] = useState('');
+  const [revision, setRevision] = useState<string>();
+  const [live, setLive] = useState<CustomerLiveStatus>();
+  const [liveError, setLiveError] = useState('');
+  useEffect(() => {
+    const controller = new AbortController(); let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try { const value = await getCustomerLiveStatus(entityId, controller.signal); if (!controller.signal.aborted) { setLive(value); setLiveError(''); } }
+      catch (e) { if (!controller.signal.aborted) setLiveError(errorText(e)); }
+      finally { if (!controller.signal.aborted) timer = setTimeout(poll, 15000); }
+    };
+    void poll();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [entityId]);
   const [filters, setFilters] = useState<CustomerFilters>({});
   const [completed, setCompleted] = useState(false);
-  const [cancelled, setCancelled] = useState(false);
-  const [progress, setProgress] = useState<CustomerQueryProgress>();
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
+  const [count, setCount] = useState(0);
+  const [tags, setTags] = useState<Array<{ value: string; label: string }>>([]);
+  const [sources, setSources] = useState<Array<{ value: number; label: string }>>([]);
   const [exporting, setExporting] = useState(false);
-  const controller = useRef<AbortController | null>(null);
-  useEffect(() => () => controller.current?.abort(), []);
+  const queryFilters = useMemo(() => ({ ...filters, userId: scope === 'employee' ? userId || '__unselected__' : undefined }), [filters, scope, userId]);
   useEffect(() => { writeCustomerPreference(preferenceKey, { scope, userId }); }, [preferenceKey, scope, userId]);
   useEffect(() => {
     let active = true;
-    setCacheLoading(true); setCacheWarning(''); setItems([]); setCompleted(false); setUpdatedAt('');
-    if (scope === 'employee' && !userId) { setCacheLoading(false); return; }
+    const controller = new AbortController();
+    setCacheLoading(true); setError('');
+    const timer = setTimeout(() => {
     (async () => {
       try {
-        let snapshot = await readCustomerCache(customerCacheKey(ownerId, entityId, scope === 'entity' ? undefined : userId));
-        if (scope === 'employee') {
-          const whole = await readCustomerCache(customerCacheKey(ownerId, entityId));
-          if (whole && (!snapshot || whole.updatedAt > snapshot.updatedAt)) snapshot = { ...whole, items: whole.items.filter(item => item.userId === userId) };
-        }
+        const snapshot = await getCustomerSnapshot(entityId, { ...queryFilters, page, pageSize }, controller.signal);
         if (active && snapshot) {
           setItems(snapshot.items); setTagWarning(snapshot.warning); setUpdatedAt(snapshot.updatedAt); setCompleted(true);
+          setFullUpdatedAt(snapshot.fullUpdatedAt || snapshot.updatedAt); setRevision(snapshot.revision);
+          setTotal(snapshot.total); setCount(snapshot.count);
+          setTags(snapshot.tags.map(tag => ({ value: tag.id, label: tag.name || tag.id })));
+          setSources([...new Set([0, 1, 2, 3, 4, ...snapshot.sources])].map(value => ({ value, label: customerSource(value) })));
+          setUsers(snapshot.users); setUserId(previous => previous && snapshot.users.includes(previous) ? previous : snapshot.users[0]);
+        } else if (active) {
+          setItems([]); setUsers([]); setCompleted(false); setUpdatedAt(''); setTagWarning(''); setTotal(0); setCount(0);
         }
-      } catch { if (active) setCacheWarning('浏览器缓存不可用，本次查询结果仅在当前页面保留'); }
+      } catch (e) { if (active) setError(errorText(e)); }
       finally { if (active) setCacheLoading(false); }
     })();
-    return () => { active = false; };
-  }, [ownerId, entityId, scope, userId]);
+    }, 250);
+    return () => { active = false; clearTimeout(timer); controller.abort(); };
+  }, [entityId, job?.updatedAt, live?.ready, live?.revision, version, queryFilters, page, pageSize]);
 
-  const clearResults = () => {
-    controller.current?.abort(); controller.current = null;
-    setLoading(false); setItems([]); setCompleted(false); setCancelled(false);
-    setProgress(undefined); setError(''); setTagWarning(''); setUpdatedAt(''); setPage(1);
-  };
-  const query = async () => {
-    if (cacheLoading || membersLoading || memberError || !users.length || (scope === 'employee' && !userId)) return;
-    controller.current?.abort();
-    setCancelled(false); setError(''); setProgress(undefined); setPage(1);
-    const current = new AbortController(); controller.current = current;
-    setLoading(true);
-    try {
-      const result = await collectCustomers(scope === 'entity' ? users : [userId!],
-        (employee, cursor) => getCustomers(entityId, employee, cursor, current.signal), current.signal, setProgress);
-      if (controller.current !== current) return;
-      const timestamp = new Date().toISOString();
-      setItems(result.items); setTagWarning(result.warning); setCompleted(true); setUpdatedAt(timestamp);
-      try {
-        await writeCustomerCache(customerCacheKey(ownerId, entityId, scope === 'entity' ? undefined : userId), { ...result, updatedAt: timestamp });
-        if (controller.current === current) setCacheWarning('');
-      } catch { if (controller.current === current) setCacheWarning('缓存保存失败，本次结果仅在当前页面保留'); }
-    } catch (e) {
-      if (controller.current === current) {
-        if (current.signal.aborted) setCancelled(true); else setError(errorText(e));
-      }
-    } finally { if (controller.current === current) setLoading(false); }
-  };
-  const filteredItems = useMemo(() => items.filter(item => matchesCustomer(item, filters)), [items, filters]);
-  const download = () => {
-    if (!completed || loading || cacheLoading || !filteredItems.length || exporting) return;
+  const download = async () => {
+    if (!completed || cacheLoading || !total || exporting) return;
     setExporting(true);
     try {
-      const workbook = buildCustomerWorkbook(filteredItems, {
+      const safeName = entityName.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 60);
+      if (total > 10000) {
+        const blob = await downloadCustomerCsv(entityId, queryFilters);
+        const url = URL.createObjectURL(blob); const anchor = document.createElement('a');
+        anchor.href = url; anchor.download = `用户管理_${safeName}_${dayjs().format('YYYYMMDD_HHmmss')}.csv`;
+        anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+        message.success('已下载全部筛选结果'); return;
+      }
+      const rows: Customer[] = [];
+      for (let current = 1; rows.length < total; current++) {
+        const snapshot = await getCustomerSnapshot(entityId, { ...queryFilters, page: current, pageSize: 100 });
+        if (!snapshot || snapshot.updatedAt !== updatedAt || snapshot.revision !== revision || !snapshot.items.length) throw new Error('同步数据已更新，请刷新后重新下载');
+        rows.push(...snapshot.items);
+      }
+      const workbook = buildCustomerWorkbook(rows, {
         entityName, scope: scope === 'entity' ? '整个主体' : `当前员工：${userId}`, updatedAt, filters, sourceLabel: customerSource,
       });
-      const safeName = entityName.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 60);
       writeFile(workbook, `用户管理_${safeName}_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
-      message.success(`已导出 ${filteredItems.length} 条客户跟进关系`);
+      message.success(`已导出 ${rows.length} 条客户跟进关系`);
     } catch { message.error('下载失败，请重试或缩小筛选范围'); }
     finally { setExporting(false); }
   };
-  const tags = useMemo(() => {
-    const result = new Map<string, string>();
-    items.forEach(item => item.tags?.forEach(tag => result.set(tag.id, tag.name || tag.id)));
-    return [...result].map(([value, label]) => ({ value, label }));
-  }, [items]);
-  const sources = useMemo(() => [...new Set([0, 1, 2, 3, 4, ...items.flatMap(item => item.addWay == null ? [] : [item.addWay])])]
-    .map(value => ({ value, label: customerSource(value) })), [items]);
   const updateFilter = <K extends keyof CustomerFilters>(key: K, value: CustomerFilters[K]) => {
     setFilters(current => ({ ...current, [key]: value })); setPage(1);
   };
-
-  useEffect(() => {
-    let active = true;
-    setMembersLoading(true);
-    setMemberError('');
-    getCustomerFollowers(entityId).then(value => {
-      if (active) { setUsers(value); setUserId(previous => previous && value.includes(previous) ? previous : value[0]); }
-    }).catch(e => { if (active) setMemberError(errorText(e)); })
-      .finally(() => { if (active) setMembersLoading(false); });
-    return () => { active = false; };
-  }, [entityId, memberVersion]);
 
   return <>
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, margin: '16px 0' }}>
       <span>查询范围</span>
       <Select aria-label="查询范围" value={scope} style={{ width: 150, maxWidth: '100%' }} options={[{ value: 'employee', label: '当前员工' }, { value: 'entity', label: '整个主体' }]}
-        onChange={value => { clearResults(); setScope(value); }} />
+        onChange={value => { setPage(1); setScope(value); }} />
       <span>跟进员工</span>
-      <Select aria-label="跟进员工" disabled={scope === 'entity'} showSearch optionFilterProp="label" value={userId} loading={membersLoading}
-        style={{ width: 280, maxWidth: '100%' }} placeholder="选择员工账号"
-        options={users.map(id => ({ value: id, label: id }))}
-        onChange={id => { clearResults(); setUserId(id); }} />
-      <Button type="primary" icon={completed ? <ReloadOutlined /> : <SearchOutlined />} disabled={cacheLoading || membersLoading || !!memberError || !users.length || loading} onClick={query}>{completed ? '刷新数据' : '查询客户'}</Button>
-      {loading && <Button icon={<StopOutlined />} onClick={() => controller.current?.abort()}>取消查询</Button>}
-      <Button icon={<ReloadOutlined />} onClick={() => { setFilters({}); setPage(1); }}>重置筛选</Button>
-      <Button icon={<DownloadOutlined />} loading={exporting} disabled={!completed || loading || cacheLoading || !filteredItems.length} onClick={download}>下载 Excel</Button>
+      <Select aria-label="跟进员工" disabled={scope === 'entity'} showSearch optionFilterProp="searchText" value={userId} loading={cacheLoading || namesLoading}
+        style={{ width: 280, maxWidth: '100%' }} placeholder="选择员工"
+        options={employees}
+        onChange={id => { setPage(1); setUserId(id); }} />
+      <Button icon={<DownloadOutlined />} loading={exporting} disabled={!completed || cacheLoading || !total} onClick={() => void download()}>{total > 10000 ? '下载 CSV' : '下载 Excel'}</Button>
     </div>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 12, marginBottom: 16 }}>
       {([
@@ -148,16 +144,26 @@ function CustomerList({ entityId, entityName, ownerId }: { entityId: number; ent
       <label>添加时间<DatePicker.RangePicker style={{ width: '100%' }} value={filters.startDate && filters.endDate ? [dayjs(filters.startDate), dayjs(filters.endDate)] : null}
         onChange={value => { setFilters(current => ({ ...current, startDate: value?.[0]?.format('YYYY-MM-DD'), endDate: value?.[1]?.format('YYYY-MM-DD') })); setPage(1); }} /></label>
     </div>
-    {loading && <Alert type="info" showIcon message={`正在读取全部分页：员工 ${progress?.employees || 0}/${scope === 'entity' ? users.length : 1}，已读 ${progress?.pages || 0} 页、${progress?.records || 0} 条关系记录`} />}
-    {cancelled && <Alert type="warning" showIcon message="查询已取消，未展示不完整结果" />}
-    {memberError && <Alert type="error" showIcon message={memberError} action={<Button onClick={() => setMemberVersion(v => v + 1)}>重试</Button>} />}
-    {error && <Alert type="error" showIcon message={`查询未完成：${error}`} action={<Button onClick={query}>重试</Button>} />}
+    {loading && <Alert type="info" showIcon message={`${job?.status === 'queued' ? '等待同步' : '后台同步中'}：员工 ${job?.employees || 0}/${job?.totalEmployees || 0}，已读 ${job?.pages || 0} 页、${job?.records || 0} 条关系记录${completed ? '；当前显示上次完整数据' : ''}`} />}
+    {job?.status === 'failed' && <Alert type="error" showIcon message={job.error} action={<Button onClick={() => void onSync(entityId)}>重试同步</Button>} />}
+    {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => setVersion(v => v + 1)}>重新读取</Button>} />}
+    {namesError && <Alert type="warning" showIcon message={namesError} action={<Button onClick={() => setNamesVersion(v => v + 1)}>重试读取名称</Button>} />}
     {tagWarning && <Alert type="warning" showIcon message={tagWarning} />}
-    {cacheWarning && <Alert type="warning" showIcon message={cacheWarning} />}
-    {completed && <div style={{ margin: '12px 0' }}>数据更新时间：{dayjs(updatedAt).format('YYYY-MM-DD HH:mm:ss')} · 共 {items.length} 条客户跟进关系 · 符合筛选 {filteredItems.length} 条</div>}
-    <Table<Customer> rowKey={r => JSON.stringify([r.externalUserId, r.userId])} dataSource={filteredItems} loading={cacheLoading || (!completed && (loading || membersLoading))}
-      pagination={{ current: page, onChange: setPage, defaultPageSize: 20, showSizeChanger: true, showTotal: total => `共 ${total} 条客户跟进关系` }} size="middle" scroll={{ x: 2650 }}
-      locale={{ emptyText: <Empty description={error || memberError ? '客户信息加载失败' : cancelled ? '查询已取消' : !completed ? '待查询' : '无符合条件的客户'} /> }}
+    {liveError && <Alert type="warning" showIcon message={`增量状态读取失败：${liveError}`} />}
+    {live?.enabled && <Alert style={{ marginTop: 8 }} type={live.failed ? 'warning' : 'info'} showIcon message={
+      !live.ready ? `增量索引准备中：已导入 ${(live.importRows || 0).toLocaleString()} 条，当前仍可查询原快照` :
+        `自动增量补查已开启 · 已检查员工 ${live.checked || 0}/${live.employees || 0} · 待更新 ${live.pending || 0} 条${live.failed ? ` · ${live.failed} 项等待重试` : ''}${live.eventAt ? ' · 已收到企微事件通知' : ' · 企微事件通知尚未接通'}`
+    } description={live.error || undefined} />}
+    {completed && <div style={{ margin: '12px 0', display: 'flex', flexWrap: 'wrap', gap: '4px 16px', color: '#657080' }}>
+      <span>最近全量完成：{dayjs(fullUpdatedAt).format('YYYY-MM-DD HH:mm:ss')}</span>
+      {live?.enabled && <span>最近增量更新：{live.incrementAt ? dayjs(live.incrementAt).format('MM-DD HH:mm:ss') : '尚未更新'}</span>}
+      {live?.latestCheckAt && <span>最近员工补查：{dayjs(live.latestCheckAt).format('MM-DD HH:mm:ss')}</span>}
+      <span>主体共 {count.toLocaleString()} 条客户跟进关系 · 符合筛选 {total.toLocaleString()} 条</span>
+    </div>}
+    {filters.endDate === dayjs().format('YYYY-MM-DD') && !cacheLoading && !total && <Alert type="warning" showIcon style={{ marginBottom: 8 }} message="当前已同步数据中暂无当日记录，今日数据可能尚未补查完整" />}
+    <Table<Customer> rowKey={r => JSON.stringify([r.externalUserId, r.userId])} dataSource={items} loading={cacheLoading}
+      pagination={{ current: page, total, pageSize, onChange: (value, size) => { setPage(size !== pageSize ? 1 : value); setPageSize(size); }, pageSizeOptions: [20, 50, 100], showSizeChanger: true, showTotal: total => `共 ${total} 条客户跟进关系` }} size="middle" scroll={{ x: 2650 }}
+      locale={{ emptyText: <Empty description={error ? '客户信息加载失败' : !completed ? '暂无完整同步数据' : '无符合条件的客户'} /> }}
       columns={[
         { title: '头像', dataIndex: 'avatar', width: 70, render: value => <Avatar size={36} src={value || undefined} icon={<UserOutlined />} /> },
         { title: '客户名称', dataIndex: 'name', width: 160, render: value => value || '-' },
@@ -194,6 +200,26 @@ export default function CustomerManage() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [version, preferenceKey]);
+  const [jobs, setJobs] = useState<CustomerSyncJob[]>([]);
+  const [jobError, setJobError] = useState('');
+  const [starting, setStarting] = useState(false);
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try { const value = await getCustomerSyncJobs(); if (active) { setJobs(value); setJobError(''); } }
+      catch (e) { if (active) setJobError(errorText(e)); }
+      finally { if (active) timer = setTimeout(poll, 3000); }
+    };
+    void poll();
+    return () => { active = false; clearTimeout(timer); };
+  }, []);
+  const sync = async (id?: number) => {
+    setStarting(true);
+    try { setJobs(await startCustomerSync(id)); setJobError(''); message.success('已加入后台同步队列'); }
+    catch (e) { setJobError(errorText(e)); }
+    finally { setStarting(false); }
+  };
   return <div>
     <PageHeader title="用户管理" />
     {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => setVersion(v => v + 1)}>重试</Button>} />}
@@ -202,7 +228,27 @@ export default function CustomerManage() {
       <Select aria-label="主体" showSearch optionFilterProp="label" loading={loading} value={entityId}
         onChange={value => { setEntityId(value); writeCustomerPreference(preferenceKey, { entityId: value }); }} placeholder="选择主体" style={{ width: 300, maxWidth: '100%' }}
         options={entities.map(entity => ({ value: entity.id, label: entity.name }))} />
+      <Button icon={<ReloadOutlined />} loading={starting} disabled={loading || !entities.length} onClick={() => void sync()}>同步全部主体</Button>
     </div>
-    {entityId && ownerId != null ? <CustomerList key={`${ownerId}:${entityId}`} entityId={entityId} entityName={entities.find(entity => entity.id === entityId)?.name || String(entityId)} ownerId={ownerId} /> : !loading && !error && <Empty description="暂无主体" />}
+    {jobError && <Alert type="error" showIcon message={jobError} />}
+    {!!jobs.length && <Collapse ghost style={{ margin: '16px 0' }} defaultActiveKey={[]} items={[{
+      key: 'sync-progress',
+      label: <Space size={[8, 4]} wrap><span>主体同步进度</span>
+        <Tag color="success">已完成 {jobs.filter(job => job.status === 'completed').length}</Tag>
+        <Tag color="processing">同步中 {jobs.filter(job => job.status === 'running').length}</Tag>
+        <Tag>排队中 {jobs.filter(job => job.status === 'queued').length}</Tag>
+        {jobs.some(job => job.status === 'failed') && <Tag color="error">失败 {jobs.filter(job => job.status === 'failed').length}</Tag>}
+      </Space>,
+      children: <div style={{ overflowX: 'auto' }}><Table<CustomerSyncJob> size="small" pagination={false} rowKey="entityId" dataSource={jobs} scroll={{ x: 700 }} columns={[
+      { title: '主体', dataIndex: 'entityId', render: id => entities.find(entity => entity.id === id)?.name || id },
+      { title: '同步状态', dataIndex: 'status', render: status => <Tag color={status === 'completed' ? 'success' : status === 'failed' ? 'error' : 'processing'}>{{ queued: '排队中', running: '同步中', completed: '已完成', failed: '失败' }[status as CustomerSyncJob['status']]}</Tag> },
+      { title: '员工进度', render: (_, row) => `${row.employees}/${row.totalEmployees}` },
+      { title: '已读页数', dataIndex: 'pages' },
+      { title: '关系记录', dataIndex: 'records' },
+      { title: '结果', render: (_, row) => row.error || row.message || (row.updatedAt ? dayjs(row.updatedAt).format('MM-DD HH:mm:ss') : '-') },
+      { title: '操作', render: (_, row) => row.status === 'failed' ? <Button size="small" icon={<ReloadOutlined />} disabled={starting} onClick={() => void sync(row.entityId)}>重试</Button> : null },
+    ]} /></div>,
+    }]} />}
+    {entityId && ownerId != null ? <CustomerList key={`${ownerId}:${entityId}`} entityId={entityId} entityName={entities.find(entity => entity.id === entityId)?.name || String(entityId)} ownerId={ownerId} job={jobs.find(job => job.entityId === entityId)} onSync={sync} /> : !loading && !error && <Empty description="暂无主体" />}
   </div>;
 }

@@ -5,7 +5,7 @@ import {
   DashboardOutlined, TeamOutlined, BarChartOutlined,
   MenuFoldOutlined, MenuUnfoldOutlined,
   UserOutlined, LogoutOutlined, UserSwitchOutlined,
-  DollarOutlined, HomeOutlined, SolutionOutlined,
+  DollarOutlined, HomeOutlined, SolutionOutlined, AppstoreOutlined,
 } from '@ant-design/icons';
 import { useAuthStore } from '../store/authStore';
 
@@ -26,6 +26,7 @@ export default function AppLayout() {
 
   const routes = [
     { key: '/', icon: <HomeOutlined />, label: '首页' },
+    { key: '/workbench', icon: <AppstoreOutlined />, label: '我的工作台' },
     { key: '/entities', icon: <TeamOutlined />, label: '主体管理' },
     { key: '/customers', icon: <UserOutlined />, label: '用户管理' },
     { key: '/warnings', icon: <DashboardOutlined />, label: '资源预警' },

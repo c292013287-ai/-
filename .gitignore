@@ -8,3 +8,7 @@ dist/
 .codebuddy/
 *.db
 backups/
+admin-backend/data/customer-snapshots/
+admin-backend/data/migration-snapshots/
+admin-backend/data/customer-callbacks.json
+admin-backend/data/customer-callbacks.json.tmp

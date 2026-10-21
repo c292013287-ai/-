@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Card, DatePicker, Descriptions, Input, InputNumber, Modal, Select, Space, Table, Tag, message } from 'antd';
+import { Alert, Button, Card, DatePicker, Descriptions, Input, InputNumber, Modal, Select, Space, Table, Tag, message } from 'antd';
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -15,7 +15,7 @@ import {
   UserSwitchOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { getFeishuMigrationRecords, updateFeishuMigrationRecord } from '../api/migration';
+import { getMigrationSnapshot, getMigrationSyncError, updateFeishuMigrationRecord } from '../api/migration';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 import {
@@ -36,7 +36,6 @@ const PUSH_BUTTON_TEXT = '点击推送';
 const PUSH_STATUS_VALUE = '推送';
 const HANDLER_OPTIONS = ['张磊', '刘奕彤', '李娜'];
 const { RangePicker } = DatePicker;
-const EMPTY_MIGRATION_STATS = getMigrationStats([]);
 
 interface DetailDraft {
   transferCount: string;
@@ -114,9 +113,17 @@ export default function UserMigration() {
   const [editingRemarkId, setEditingRemarkId] = useState<number | null>(null);
   const [remarkDraft, setRemarkDraft] = useState('');
   const [savingRemarkId, setSavingRemarkId] = useState<number | null>(null);
-  const [liveMigrationStats, setLiveMigrationStats] = useState(EMPTY_MIGRATION_STATS);
+  const [liveMigrationStats, setLiveMigrationStats] = useState<ReturnType<typeof getMigrationStats> | null>(null);
+  const [syncError, setSyncError] = useState('');
+  const [lastSyncedAt, setLastSyncedAt] = useState('');
   const [syncing, setSyncing] = useState(false);
-  const autoSyncingRef = useRef(false);
+  const [sourceRefreshing, setSourceRefreshing] = useState(false);
+  const requestRef = useRef<AbortController | null>(null);
+  const activeRef = useRef(false);
+  const revisionRef = useRef('');
+  const sourceRef = useRef('');
+  const recordsRef = useRef(records);
+  const mutationRef = useRef({ active: 0, version: 0 });
 
   const filteredRecords = useMemo(() => records
     .filter((record) => {
@@ -161,15 +168,23 @@ export default function UserMigration() {
   };
 
   const persist = (nextRecords: MigrationRecord[]) => {
+    recordsRef.current = nextRecords;
     setRecords(nextRecords);
-    saveMigrationRecords(nextRecords);
+    try { saveMigrationRecords(nextRecords); }
+    catch { setSyncError('数据已更新，但浏览器缓存写入失败；刷新后将从服务器重新读取'); }
   };
 
   const syncFeishuRecords = useCallback(async (manual = false) => {
-    if (autoSyncingRef.current) return;
+    if (!activeRef.current) return;
+    if (mutationRef.current.active) return;
+    if (requestRef.current) {
+      if (!manual) return;
+      requestRef.current.abort();
+    }
 
     const config = loadFeishuFormConfig();
     if (!config.appToken || !config.tableId) {
+      setSyncError('尚未配置飞书源表，请在信息采集页检查采集表链接');
       if (manual) {
         message.warning('请先在信息采集页配置飞书 App Token 和 Table ID');
         navigate('/migration/collect');
@@ -177,47 +192,78 @@ export default function UserMigration() {
       return;
     }
 
-    autoSyncingRef.current = true;
+    const sourceKey = JSON.stringify([config.appToken, config.tableId, config.viewId || '']);
+    if (sourceRef.current !== sourceKey) {
+      sourceRef.current = sourceKey;
+      revisionRef.current = '';
+      setLiveMigrationStats(null);
+      setLastSyncedAt('');
+    }
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const mutationVersion = mutationRef.current.version;
     if (manual) setSyncing(true);
 
     try {
-      const feishuRows = await getFeishuMigrationRecords({
+      const snapshot = await getMigrationSnapshot({
         appToken: config.appToken,
         tableId: config.tableId,
         viewId: config.viewId || undefined,
-      });
-      const incomingRecords = feishuRows.map(migrationRecordFromFeishu);
-      setLiveMigrationStats(getMigrationStats(incomingRecords));
-      const currentRecords = loadMigrationRecords();
-      const currentSourceIds = new Set(currentRecords.map((record) => record.sourceRecordId).filter(Boolean));
-      const addedCount = incomingRecords.filter((record) => record.sourceRecordId && !currentSourceIds.has(record.sourceRecordId)).length;
-      const nextRecords = mergeMigrationRecords(currentRecords, incomingRecords);
-      saveMigrationRecords(nextRecords);
-      setRecords(nextRecords);
-
-      if (manual) {
-        message.success(`已保存并同步 ${incomingRecords.length} 条飞书提交信息`);
-      } else if (addedCount > 0) {
-        message.success(`已自动同步 ${addedCount} 条新增迁移信息`);
+        revision: revisionRef.current || undefined,
+      }, manual, controller.signal);
+      const currentConfig = loadFeishuFormConfig();
+      if (controller.signal.aborted || mutationVersion !== mutationRef.current.version
+        || sourceKey !== JSON.stringify([currentConfig.appToken, currentConfig.tableId, currentConfig.viewId || ''])) return;
+      setSourceRefreshing(snapshot.refreshing);
+      setSyncError(snapshot.error ? `${snapshot.error}。当前保留上次成功数据，服务器将自动重试。` : '');
+      if (snapshot.ready) {
+        if (snapshot.records) {
+          const incomingRecords = snapshot.records.map(migrationRecordFromFeishu);
+          const nextRecords = mergeMigrationRecords(recordsRef.current, incomingRecords);
+          recordsRef.current = nextRecords;
+          setRecords(nextRecords);
+          setLiveMigrationStats(getMigrationStats(incomingRecords));
+          revisionRef.current = snapshot.revision;
+          try { saveMigrationRecords(nextRecords); }
+          catch { setSyncError('最新源表已读取，但浏览器缓存写入失败；刷新后将从服务器重新读取'); }
+        }
+        setLastSyncedAt(dayjs(snapshot.updatedAt).format('YYYY-MM-DD HH:mm:ss'));
       }
+      if (manual) message.info('已请求后台同步，完成后自动更新');
     } catch (error) {
-      const errorMessage = error && typeof error === 'object' && 'response' in error
-        ? (error as { response?: { data?: { error?: string } } }).response?.data?.error
-        : undefined;
-      if (manual) message.error(errorMessage || '保存并同步飞书提交信息失败');
+      if (controller.signal.aborted) return;
+      const errorMessage = getMigrationSyncError(error);
+      setSyncError(`${errorMessage}。当前保留上次数据，尚未完成本次源表同步。`);
+      if (manual) message.error(errorMessage);
     } finally {
-      autoSyncingRef.current = false;
-      if (manual) setSyncing(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setSyncing(false);
+      }
     }
   }, [navigate]);
 
   useEffect(() => {
+    activeRef.current = true;
     void syncFeishuRecords(false);
     const timer = window.setInterval(() => {
-      void syncFeishuRecords(false);
-    }, 10_000);
-
-    return () => window.clearInterval(timer);
+      if (document.visibilityState === 'visible') void syncFeishuRecords(false);
+    }, 5_000);
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void syncFeishuRecords(false);
+    };
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      activeRef.current = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+      requestRef.current?.abort();
+      requestRef.current = null;
+    };
   }, [syncFeishuRecords]);
 
   const handleManualFieldChange = (fieldName: keyof DetailDraft, value: string | undefined) => {
@@ -296,6 +342,8 @@ export default function UserMigration() {
     }
 
     setPushingId(record.id);
+    mutationRef.current.active++;
+    mutationRef.current.version++;
     try {
       const transferCountValue = Number(detailDraft.transferCount);
       const transferCount = String(transferCountValue);
@@ -313,7 +361,7 @@ export default function UserMigration() {
         },
       );
 
-      const localSyncedRecords = records.map((item) => (
+      const localSyncedRecords = recordsRef.current.map((item) => (
         item.id === record.id
           ? {
             ...item,
@@ -350,7 +398,10 @@ export default function UserMigration() {
         : undefined;
       message.error(errorMessage || '回写飞书操作状态失败');
     } finally {
+      mutationRef.current.active--;
+      mutationRef.current.version++;
       setPushingId(null);
+      void syncFeishuRecords(false);
     }
   };
 
@@ -388,13 +439,15 @@ export default function UserMigration() {
     }
 
     setSavingRemarkId(record.id);
+    mutationRef.current.active++;
+    mutationRef.current.version++;
     try {
       await updateFeishuMigrationRecord(
         record.sourceRecordId,
         { appToken: config.appToken, tableId: config.tableId },
         { 备注: nextRemark },
       );
-      persist(records.map((item) => (
+      persist(recordsRef.current.map((item) => (
         item.id === record.id
           ? { ...item, rawFields: { ...(item.rawFields || {}), 备注: nextRemark } }
           : item
@@ -407,7 +460,10 @@ export default function UserMigration() {
         : undefined;
       message.error(errorMessage || '保存备注失败');
     } finally {
+      mutationRef.current.active--;
+      mutationRef.current.version++;
       setSavingRemarkId(null);
+      void syncFeishuRecords(false);
     }
   };
 
@@ -550,9 +606,15 @@ export default function UserMigration() {
       />
 
       <div className="summary-grid migration-summary-grid">
-        <StatCard title="采集用户" value={liveMigrationStats.totalCollected} suffix="人" gradient="blue" color="#1677ff" prefix={<UserSwitchOutlined style={{ color: '#1677ff' }} />} />
-        <StatCard title="迁移中" value={liveMigrationStats.migratingCount} suffix="人" gradient="red" color="#cf1322" prefix={<ClockCircleOutlined style={{ color: '#cf1322' }} />} />
-        <StatCard title="完成率" value={liveMigrationStats.completionRate} suffix="%" gradient="green" color="#52c41a" prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />} />
+        <StatCard title="采集用户" value={liveMigrationStats?.totalCollected ?? '--'} suffix={liveMigrationStats ? '人' : undefined} gradient="blue" color="#1677ff" prefix={<UserSwitchOutlined style={{ color: '#1677ff' }} />} />
+        <StatCard title="迁移中" value={liveMigrationStats?.migratingCount ?? '--'} suffix={liveMigrationStats ? '人' : undefined} gradient="red" color="#cf1322" prefix={<ClockCircleOutlined style={{ color: '#cf1322' }} />} />
+        <StatCard title="完成率" value={liveMigrationStats?.completionRate ?? '--'} suffix={liveMigrationStats ? '%' : undefined} gradient="green" color="#52c41a" prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />} />
+      </div>
+
+      {syncError && <Alert type="warning" showIcon title={syncError} style={{ marginBottom: 12 }} action={<Button size="small" loading={syncing} onClick={() => void syncFeishuRecords(true)}>重试同步</Button>} />}
+      <div role="status" style={{ marginBottom: 12, color: '#667085', fontSize: 12 }}>
+        {sourceRefreshing ? '后台正在同步源表… ' : ''}
+        {lastSyncedAt ? `源表最后同步成功：${lastSyncedAt}` : '源表统计尚未加载'}
       </div>
 
       <Card className="migration-filter-card" size="small" style={{ marginBottom: 16 }}>

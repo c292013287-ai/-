@@ -103,6 +103,10 @@ export async function getCustomerFollowers(id: number): Promise<string[]> {
   return data.users;
 }
 
+export async function getEmployeeNames(id: number, signal?: AbortSignal): Promise<Record<string, string>> {
+  return (await client.get(`/entities/${id}/employee-names`, { headers: entityAccessHeaders(), signal })).data.names;
+}
+
 export async function getCustomers(id: number, userId: string, cursor: string, signal?: AbortSignal): Promise<{ items: Customer[]; nextCursor: string; tagWarning?: string }> {
   const { data } = await client.get(`/entities/${id}/customers`, { params: { userId, cursor }, headers: entityAccessHeaders(), signal });
   return data;
@@ -118,6 +122,54 @@ export interface ServedUserJob {
   finishedAt?: string;
   error?: string;
   result?: { servedUserCount: number; servedUserCountUpdatedAt: string };
+}
+
+export interface CustomerSyncJob {
+  message?: string;
+  entityId: number;
+  status: 'queued' | 'running' | 'completed' | 'failed';
+  employees: number;
+  totalEmployees: number;
+  pages: number;
+  records: number;
+  startedAt: string;
+  finishedAt?: string;
+  updatedAt?: string;
+  error?: string;
+}
+export interface CustomerServerSnapshot {
+  revision?: string;
+  fullUpdatedAt?: string;
+  mode?: 'incremental';
+  items: Customer[];
+  users: string[];
+  warning: string;
+  updatedAt: string;
+  total: number;
+  count: number;
+  tags: Array<{ id: string; name: string }>;
+  sources: number[];
+}
+export interface CustomerLiveStatus {
+  enabled: boolean; ready?: boolean; importRows?: number; incrementAt?: number | null;
+  eventAt?: number | null; revision?: string; employees?: number; checked?: number;
+  failed?: number; pending?: number; oldestCheckAt?: number | null; latestCheckAt?: number | null;
+  error?: string; callbackPrepared?: boolean;
+}
+export async function getCustomerLiveStatus(id: number, signal?: AbortSignal): Promise<CustomerLiveStatus> {
+  return (await client.get(`/entities/${id}/customers/live-status`, { headers: entityAccessHeaders(), signal })).data;
+}
+export async function getCustomerSnapshot(id: number, params: Record<string, unknown> = {}, signal?: AbortSignal): Promise<CustomerServerSnapshot | null> {
+  return (await client.get(`/entities/${id}/customers/snapshot`, { headers: entityAccessHeaders(), params, signal })).data;
+}
+export async function downloadCustomerCsv(id: number, params: Record<string, unknown>) {
+  return (await client.get(`/entities/${id}/customers/export`, { headers: entityAccessHeaders(), params, responseType: 'blob', timeout: 300000 })).data as Blob;
+}
+export async function getCustomerSyncJobs(): Promise<CustomerSyncJob[]> {
+  return (await client.get('/entities/customers/jobs', { headers: entityAccessHeaders() })).data;
+}
+export async function startCustomerSync(entityId?: number): Promise<CustomerSyncJob[]> {
+  return (await client.post('/entities/customers/sync', { entityId }, { headers: entityAccessHeaders() })).data;
 }
 
 export async function getServedUserJobs(): Promise<ServedUserJob[]> {

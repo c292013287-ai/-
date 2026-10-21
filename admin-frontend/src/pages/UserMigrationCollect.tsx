@@ -3,7 +3,7 @@ import { Alert, Button, Card, Form, Input, Modal, Space, Table, Tag, Typography,
 import { ArrowLeftOutlined, CopyOutlined, ExportOutlined, LinkOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
-import { getFeishuMigrationRecords } from '../api/migration';
+import { getFeishuMigrationRecords, getMigrationSyncError } from '../api/migration';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 import {
@@ -127,6 +127,7 @@ export default function UserMigrationCollect() {
   const [importText, setImportText] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState('');
+  const [syncError, setSyncError] = useState('');
   const autoSyncedRef = useRef(false);
 
   const submittedRows = useMemo(() => records.filter((record) => record.status !== '待采集'), [records]);
@@ -147,15 +148,16 @@ export default function UserMigrationCollect() {
       });
       const incomingRecords = feishuRows.map(migrationRecordFromFeishu);
       const nextRecords = mergeMigrationRecords(loadMigrationRecords(), incomingRecords);
-      saveMigrationRecords(nextRecords);
       setRecords(nextRecords);
       setLastSyncedAt(dayjs().format('YYYY-MM-DD HH:mm:ss'));
+      setSyncError('');
+      try { saveMigrationRecords(nextRecords); }
+      catch { setSyncError('最新源表已读取，但浏览器缓存写入失败；刷新后需要重新读取'); }
       if (!silent) message.success(`已自动同步 ${incomingRecords.length} 条飞书提交信息`);
     } catch (error) {
-      const errorMessage = error && typeof error === 'object' && 'response' in error
-        ? (error as { response?: { data?: { error?: string } } }).response?.data?.error
-        : undefined;
-      message.error(errorMessage || '自动获取飞书提交信息失败');
+      const errorMessage = getMigrationSyncError(error);
+      setSyncError(`${errorMessage}。已保留上次成功读取的数据。`);
+      if (!silent) message.error(errorMessage);
     } finally {
       setSyncing(false);
     }
@@ -279,6 +281,8 @@ export default function UserMigrationCollect() {
         <StatCard title="已同步提交" value={submittedRows.length} suffix="条" gradient="blue" color="#1677ff" />
         <StatCard title="今日新增" value={todayCount} suffix="条" gradient="green" color="#52c41a" />
       </div>
+
+      {syncError && <Alert type="warning" showIcon title={syncError} style={{ marginBottom: 12 }} />}
 
       <Card size="small" title={<span><LinkOutlined style={{ color: '#ed6a1c', marginRight: 8 }} />飞书采集表配置</span>} style={{ marginBottom: 16 }}>
         <Alert

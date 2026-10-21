@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import prisma from '../lib/prisma';
 import { syncEntityQuota } from './sync';
+import { customerSyncJobs } from './customerSyncJobs';
 
 async function syncTodayData() {
   const entities = await prisma.wecomEntity.findMany({ where: { status: 'active' } });
@@ -15,6 +16,13 @@ async function syncTodayData() {
 
 cron.schedule('*/5 * * * *', syncTodayData);
 cron.schedule('0 0 * * *', syncTodayData);
+cron.schedule('0 2 * * 0', async () => {
+  if (process.env.CUSTOMER_LIVE_ENABLED !== 'true') return;
+  try {
+    const entities = await prisma.wecomEntity.findMany({ where: { status: 'active' }, select: { id: true } });
+    await customerSyncJobs.start(entities.map(entity => entity.id));
+  } catch { console.error('[CustomerLive] weekly full sync could not be queued'); }
+}, { timezone: 'Asia/Shanghai' });
 
 export function startScheduler() {
   console.log('[Scheduler] 定时任务已启动');

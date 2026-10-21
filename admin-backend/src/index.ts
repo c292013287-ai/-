@@ -7,8 +7,12 @@ import consumptionRoutes from './routes/consumption';
 import dashboardRoutes from './routes/dashboard';
 import rechargeRoutes from './routes/recharges';
 import announcementRoutes from './routes/announcements';
-import migrationRoutes from './routes/migration';
+import workbenchRoutes from './routes/workbench';
+import migrationRoutes, { startMigrationSnapshots } from './routes/migration';
 import { startScheduler } from './services/scheduler';
+import customerCallbacks from './routes/customerCallbacks';
+import { customerLive } from './services/customerLive';
+import { customerSyncJobs } from './services/customerSyncJobs';
 
 dotenv.config();
 
@@ -35,11 +39,13 @@ app.use((req, _res, next) => {
 
 // 路由
 app.use('/api/auth', authRoutes);
+app.use('/api/wecom/customer-events', customerCallbacks);
 app.use('/api/entities', entityRoutes);
 app.use('/api/consumption', consumptionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/recharges', rechargeRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/workbench', workbenchRoutes);
 app.use('/api/migration', migrationRoutes);
 
 // 健康检查
@@ -54,6 +60,9 @@ app.listen(PORT, () => {
 
   // 启动定时任务
   startScheduler();
+  void startMigrationSnapshots().catch(() => console.error('[MigrationSync] Initialization failed'));
+  void customerLive.start().then(() => customerLive.enabled ? customerSyncJobs.resumeInterrupted() : undefined)
+    .catch(() => console.error('[CustomerLive] initialization failed; snapshot queries remain available'));
 });
 
 export default app;
