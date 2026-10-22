@@ -6,6 +6,8 @@ import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { entityManagementOnly } from '../middleware/entityManagement';
 import { syncEntityQuota } from '../services/sync';
 import { parseCertificationDate } from '../lib/certificationDate';
+import { parseExternalContactCapacity } from '../lib/externalContactForecast';
+import { withContactForecasts } from '../services/externalContactForecasts';
 import { servedUserJobs } from '../services/servedUserJobs';
 import { getCustomerPage, getEmployeeNames } from '../services/wecom';
 import { customerSyncJobs } from '../services/customerSyncJobs';
@@ -84,7 +86,7 @@ router.get('/', async (_req: AuthRequest, res: Response) => {
 // GET /api/entities/manage - 主体管理完整列表
 router.get('/manage', entityManagementOnly, async (_req: AuthRequest, res: Response) => {
   try {
-    res.json(await prisma.wecomEntity.findMany({ orderBy: { createdAt: 'desc' } }));
+    res.json(await withContactForecasts(await prisma.wecomEntity.findMany({ orderBy: { createdAt: 'desc' } })));
   } catch {
     res.status(500).json({ error: '获取主体列表失败' });
   }
@@ -244,7 +246,11 @@ router.post('/:id/sync', async (req: AuthRequest, res: Response) => {
 // POST /api/entities
 router.post('/', entityManagementOnly, async (req: AuthRequest, res: Response) => {
   let certificationExpiresAt;
-  try { certificationExpiresAt = parseCertificationDate(req.body.certificationExpiresAt); }
+  let externalContactCapacity;
+  try {
+    certificationExpiresAt = parseCertificationDate(req.body.certificationExpiresAt);
+    externalContactCapacity = parseExternalContactCapacity(req.body.externalContactCapacity);
+  }
   catch (error) { return res.status(400).json({ error: (error as Error).message }); }
   try {
     const { name, sku, corpid, secret, quotaTotal, rechargeAmount, monthlyBudget, wecomApiBaseUrl } = req.body;
@@ -254,6 +260,7 @@ router.post('/', entityManagementOnly, async (req: AuthRequest, res: Response) =
       data: {
         name, sku: sku || null, corpid, secret, wecomApiBaseUrl: wecomApiBaseUrl || null,
         certificationExpiresAt,
+        externalContactCapacity,
         rechargeAmount: Number(rechargeAmount || 0),
         monthlyBudget: Number(monthlyBudget || 0),
         quotaTotal: Number(quotaTotal || 0),
@@ -268,21 +275,31 @@ router.post('/', entityManagementOnly, async (req: AuthRequest, res: Response) =
 // PUT /api/entities/:id
 router.put('/:id', entityManagementOnly, async (req: AuthRequest, res: Response) => {
   let certificationExpiresAt;
-  try { certificationExpiresAt = parseCertificationDate(req.body.certificationExpiresAt); }
+  let externalContactCapacity;
+  try {
+    certificationExpiresAt = parseCertificationDate(req.body.certificationExpiresAt);
+    externalContactCapacity = parseExternalContactCapacity(req.body.externalContactCapacity);
+  }
   catch (error) { return res.status(400).json({ error: (error as Error).message }); }
   try {
     const { name, sku, rechargeAmount, monthlyBudget, corpid, secret, status, quotaTotal, wecomApiBaseUrl } = req.body;
     const id = Number(req.params.id);
-    if (!(await prisma.wecomEntity.findUnique({ where: { id } }))) return res.status(404).json({ error: '主体不存在' });
+    const current = await prisma.wecomEntity.findUnique({ where: { id } });
+    if (!current) return res.status(404).json({ error: '主体不存在' });
 
     const data: any = { name, sku, corpid, secret, status };
     if (certificationExpiresAt !== undefined) data.certificationExpiresAt = certificationExpiresAt;
+    if (externalContactCapacity !== undefined) data.externalContactCapacity = externalContactCapacity;
     if (wecomApiBaseUrl !== undefined) data.wecomApiBaseUrl = wecomApiBaseUrl || null;
     if (rechargeAmount !== undefined) data.rechargeAmount = Number(rechargeAmount);
     if (monthlyBudget !== undefined) data.monthlyBudget = Number(monthlyBudget);
     if (quotaTotal !== undefined) { data.quotaTotal = quotaTotal; data.quotaBalance = quotaTotal; }
 
     Object.keys(data).forEach(k => data[k] === undefined && delete data[k]);
+    if (fingerprintOf({ ...current, ...data }) !== fingerprintOf(current)) {
+      data.servedUserCount = null;
+      data.servedUserCountUpdatedAt = null;
+    }
     res.json(await prisma.wecomEntity.update({ where: { id }, data }));
   } catch {
     res.status(500).json({ error: '更新主体失败' });

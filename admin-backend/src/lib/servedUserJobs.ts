@@ -1,4 +1,5 @@
 import type { ServedUserProgress } from './servedUserCount';
+import type { ContactForecast } from './externalContactForecast';
 
 export interface ServedUserJob extends ServedUserProgress {
   entityId: number;
@@ -6,7 +7,7 @@ export interface ServedUserJob extends ServedUserProgress {
   startedAt: string;
   finishedAt?: string;
   error?: string;
-  result?: { servedUserCount: number; servedUserCountUpdatedAt: string };
+  result?: { servedUserCount: number; servedUserCountUpdatedAt: string; externalContactForecast?: ContactForecast };
 }
 
 type Runner = (id: number, progress: (value: ServedUserProgress) => void) => Promise<NonNullable<ServedUserJob['result']>>;

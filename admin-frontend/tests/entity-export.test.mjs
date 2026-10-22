@@ -17,7 +17,8 @@ test('exports every entity, numeric zero, saved timestamps and no credentials', 
   assert.equal(rows.length, 26);
   assert.equal(rows[1][9], 0);
   assert.equal(rows[2][9], '未统计');
-  assert.match(rows[1][10], /15:17:24/);
+  assert.equal(rows[1][10], '未设置已购档位');
+  assert.match(rows[1][11], /15:17:24/);
   assert.equal(rows[1][8], '2027-09-04');
   assert.equal(sheet.C2.t, 's');
   assert.equal(sheet.C2.f, undefined);
@@ -26,5 +27,5 @@ test('exports every entity, numeric zero, saved timestamps and no credentials', 
 
 test('empty export retains column headers', () => {
   const wb = buildEntityWorkbook([]);
-  assert.equal(wb.Sheets['主体管理']['!ref'], 'A1:K1');
+  assert.equal(wb.Sheets['主体管理']['!ref'], 'A1:L1');
 });

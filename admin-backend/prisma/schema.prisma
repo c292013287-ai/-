@@ -74,14 +74,30 @@ model WecomEntity {
   certificationExpiresAt DateTime? @db.Date @map("certification_expires_at")
   servedUserCount Int? @map("served_user_count")
   servedUserCountUpdatedAt DateTime? @map("served_user_count_updated_at")
+  externalContactCapacity Int? @map("external_contact_capacity")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 
   records   ConsumptionRecord[]
   syncLogs  SyncLog[]
   recharges RechargeRecord[]
+  servedUserDailyStats ServedUserDailyStat[]
 
   @@map("wecom_entities")
+}
+
+model ServedUserDailyStat {
+  id          Int      @id @default(autoincrement())
+  entityId    Int      @map("entity_id")
+  date        DateTime @db.Date
+  count       Int
+  measuredAt  DateTime @map("measured_at")
+  fingerprint String   @db.VarChar(64)
+
+  entity WecomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, date])
+  @@map("served_user_daily_stats")
 }
 
 model ConsumptionRecord {

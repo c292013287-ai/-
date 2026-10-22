@@ -17,12 +17,23 @@ export interface WecomEntity {
   certificationExpiresAt?: string | null;
   servedUserCount?: number | null;
   servedUserCountUpdatedAt?: string | null;
+  externalContactCapacity?: number | null;
+  externalContactForecast?: ExternalContactForecast;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface ExternalContactForecast {
+  status: 'unconfigured' | 'unmeasured' | 'stale' | 'limit_reached' | 'insufficient_history' | 'not_growing' | 'forecast' | 'out_of_range';
+  capacity: number | null;
+  remaining: number | null;
+  dailyNetGrowth: number | null;
+  estimatedPurchaseDate: string | null;
+}
+
 export interface EntityFormData {
   certificationExpiresAt?: string | null;
+  externalContactCapacity?: number | null;
   name: string;
   sku?: string;
   rechargeAmount?: number;
@@ -121,7 +132,7 @@ export interface ServedUserJob {
   startedAt: string;
   finishedAt?: string;
   error?: string;
-  result?: { servedUserCount: number; servedUserCountUpdatedAt: string };
+  result?: { servedUserCount: number; servedUserCountUpdatedAt: string; externalContactForecast?: ExternalContactForecast };
 }
 
 export interface CustomerSyncJob {

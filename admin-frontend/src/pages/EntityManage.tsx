@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Alert, DatePicker, Table, Button, Modal, Form, Input, Space, Tag, Popconfirm, message } from 'antd';
+import { Alert, DatePicker, Table, Button, Modal, Form, Grid, Input, InputNumber, Select, Space, Tag, Tooltip, Popconfirm, message } from 'antd';
 import dayjs from 'dayjs';
 import { certificationStatus } from './entityCertification';
+import { CONTACT_CAPACITY_TIERS, contactForecastDisplay } from './entityContactForecast';
 import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SyncOutlined, TeamOutlined } from '@ant-design/icons';
 import { writeFile } from 'xlsx';
 import { buildEntityWorkbook } from './entityExport';
@@ -23,6 +24,8 @@ export default function EntityManage() {
   const [progressError, setProgressError] = useState('');
   const [countErrors, setCountErrors] = useState<Record<number, string>>({});
   const [form] = Form.useForm();
+  const capacityChoice = Form.useWatch('contactCapacityChoice', form);
+  const screens = Grid.useBreakpoint();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60000);
@@ -49,7 +52,7 @@ export default function EntityManage() {
         setProgressError('');
         setEntities(current => current.map(entity => {
           const result = next.find(job => job.entityId === entity.id && job.status === 'completed')?.result;
-          return result && (!entity.servedUserCountUpdatedAt || result.servedUserCountUpdatedAt >= entity.servedUserCountUpdatedAt)
+          return result && (!entity.servedUserCountUpdatedAt || result.servedUserCountUpdatedAt > entity.servedUserCountUpdatedAt)
             ? { ...entity, ...result } : entity;
         }));
       } catch {
@@ -66,6 +69,7 @@ export default function EntityManage() {
 
   const handleEdit = (entity: WecomEntity) => {
     setEditingId(entity.id);
+    form.resetFields();
     form.setFieldsValue({
       name: entity.name,
       sku: entity.sku,
@@ -73,6 +77,9 @@ export default function EntityManage() {
       secret: entity.secret,
       wecomApiBaseUrl: entity.wecomApiBaseUrl,
       certificationExpiresAt: entity.certificationExpiresAt ? dayjs(entity.certificationExpiresAt.slice(0, 10)) : null,
+      contactCapacityChoice: entity.externalContactCapacity != null && !CONTACT_CAPACITY_TIERS.includes(entity.externalContactCapacity)
+        ? 'custom' : entity.externalContactCapacity,
+      customExternalContactCapacity: entity.externalContactCapacity,
     });
     setModalOpen(true);
   };
@@ -107,11 +114,12 @@ export default function EntityManage() {
         secret: v.secret,
         wecomApiBaseUrl: v.wecomApiBaseUrl,
         certificationExpiresAt: v.certificationExpiresAt?.format('YYYY-MM-DD') || null,
+        externalContactCapacity: v.contactCapacityChoice === 'custom' ? v.customExternalContactCapacity : v.contactCapacityChoice ?? null,
       };
       if (editingId) { await updateEntity(editingId, d); message.success('更新成功'); }
       else { await createEntity(d); message.success('创建成功'); }
       setModalOpen(false); fetchData();
-    } catch (e: any) { if (!e?.errorFields) message.error('操作失败'); }
+    } catch (e: any) { if (!e?.errorFields) message.error(e.response?.data?.error || '操作失败'); }
     finally { setSubmitting(false); }
   };
 
@@ -186,10 +194,22 @@ export default function EntityManage() {
         })()}
         {countErrors[r.id] && <span style={{ color: '#cf1322', fontSize: 12 }}>{countErrors[r.id]}</span>}
       </Space> },
+    { title: '外部联系人规模预计增购时间', key: 'externalContactForecast', width: 280,
+      sorter: (a: WecomEntity, b: WecomEntity) => contactForecastDisplay(a, now).sortDate.localeCompare(contactForecastDisplay(b, now).sortDate),
+      render: (_: unknown, entity: WecomEntity) => {
+        const display = contactForecastDisplay(entity, now);
+        return <Tooltip title="按已购规模剩余名额和最近7天日均净新增人数估算；需有相隔7天的有效统计，统计超过48小时未更新时暂停预测。">
+          <Space direction="vertical" size={4}>
+            <span style={{ color: display.color }}>{display.label}</span>
+            {entity.externalContactCapacity != null && <span style={{ fontSize: 12, color: '#64748b' }}>已购 {entity.externalContactCapacity.toLocaleString()} 位</span>}
+            {entity.externalContactForecast?.dailyNetGrowth != null && <span style={{ fontSize: 12, color: '#64748b' }}>日均净增 {entity.externalContactForecast.dailyNetGrowth.toLocaleString('zh-CN', { maximumFractionDigits: 1 })} 人</span>}
+          </Space>
+        </Tooltip>;
+      } },
     { title: '服务人数统计更新时间', dataIndex: 'servedUserCountUpdatedAt', key: 'servedUserCountUpdatedAt', width: 220,
       sorter: (a: WecomEntity, b: WecomEntity) => (Date.parse(a.servedUserCountUpdatedAt || '') || 0) - (Date.parse(b.servedUserCountUpdatedAt || '') || 0),
       render: (v: string | null) => v ? new Date(v).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '-' },
-    { title: '操作', key: 'action', width: 350, fixed: 'right' as const,
+    { title: '操作', key: 'action', width: 350, fixed: screens.md ? 'right' as const : undefined,
       render: (_: any, r: WecomEntity) => (
         <Space size={6}>
           <Button size="small" icon={<SyncOutlined />} onClick={() => handleSync(r.id, r.name)}>同步</Button>
@@ -227,7 +247,7 @@ export default function EntityManage() {
         style={{ marginBottom: 16 }} message={`认证到期预警：${expiryAlerts.length} 个主体需关注`}
         description={<Space wrap>{expiryAlerts.map(({ entity, label, color }) => <Tag key={entity.id} color={color}>{entity.name}：{label}</Tag>)}</Space>} />}
 
-      <Table dataSource={entities} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 2330 }}
+      <Table dataSource={entities} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 2610 }}
         pagination={{ pageSize: 20, showTotal: (t: number) => `共 ${t} 个主体` }} />
 
       <Modal title={editingId ? '编辑主体' : '添加主体'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} confirmLoading={submitting} destroyOnClose width={480}>
@@ -235,6 +255,15 @@ export default function EntityManage() {
           <Form.Item name="name" label="主体名称" rules={[{ required: true }]}><Input placeholder="例如：开开华彩文艺" /></Form.Item>
           <Form.Item name="sku" label="SKU"><Input placeholder="可选，如 声乐" /></Form.Item>
           <Form.Item name="certificationExpiresAt" label="企业微信主体认证到期日期"><DatePicker format="YYYY-MM-DD" style={{ width: '100%' }} placeholder="选择认证到期日期" /></Form.Item>
+          <Form.Item name="contactCapacityChoice" label="外部联系人规模（已购档位）">
+            <Select allowClear placeholder="选择实际已购规模" options={[
+              ...CONTACT_CAPACITY_TIERS.map(value => ({ value, label: `${value.toLocaleString()} 位` })),
+              { value: 'custom', label: '更大规模（自定义，200万位起）' },
+            ]} />
+          </Form.Item>
+          {capacityChoice === 'custom' && <Form.Item name="customExternalContactCapacity" label="已购规模人数" rules={[{ required: true, message: '请输入已购规模人数' }]}>
+            <InputNumber min={2000000} max={2147483647} precision={0} style={{ width: '100%' }} placeholder="至少 2,000,000 位" />
+          </Form.Item>}
           <Form.Item name="corpid" label="企业ID" rules={[{ required: true }]}><Input placeholder="wwxxxxxxxxxxxxxx" /></Form.Item>
           <Form.Item name="secret" label="应用Secret" rules={[{ required: true }]}><Input.Password placeholder="获客助手应用的Secret" /></Form.Item>
           <Form.Item name="wecomApiBaseUrl" label="同步出口地址">
