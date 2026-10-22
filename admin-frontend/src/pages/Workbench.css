@@ -76,14 +76,14 @@
 .workbench-load-error { margin-bottom: 16px; }
 .workbench-toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin: 4px 0 24px; }
 .workbench-search { flex: 1 1 180px; max-width: 360px; }
-.workbench-notes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; list-style: none; padding: 0; margin: 0; }
-.workbench-note { min-width: 0; border: 1px solid var(--app-line-soft); border-radius: 8px; background: #fff; overflow: hidden; }
+.workbench-notes { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); align-items: start; gap: 16px; list-style: none; padding: 0; margin: 0; }
+.workbench-note { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--app-line-soft); border-radius: 8px; background: #fff; overflow: hidden; }
 .workbench-note:focus-within, .workbench-note:hover { border-color: #cbd5e1; }
 .workbench-note-body { display: block; width: 100%; padding: 20px; border: 0; background: transparent; text-align: left; cursor: pointer; color: var(--app-ink); }
 .workbench-note-body h3 { margin: 0 0 12px; font-size: 15px; font-weight: 600; line-height: 24px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workbench-pin { color: #1677ff; margin-right: 8px; }
-.workbench-note-body p { margin: 0; height: 72px; line-height: 24px; font-size: 14px; color: var(--app-muted); white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
-.workbench-note-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 12px 20px; }
+.workbench-note-body p { margin: 0; line-height: 24px; font-size: 14px; color: var(--app-muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.workbench-note-footer { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px 12px 20px; }
 .workbench-note-footer time { font-size: 12px; color: var(--app-muted); font-variant-numeric: tabular-nums; }
 .workbench-row-actions { display: flex; align-items: center; flex: 0 0 auto; }
 .workbench-row-actions .ant-btn { width: 32px; height: 32px; padding: 0; }
