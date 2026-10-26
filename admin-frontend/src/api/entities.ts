@@ -18,6 +18,8 @@ export interface WecomEntity {
   servedUserCount?: number | null;
   servedUserCountUpdatedAt?: string | null;
   externalContactCapacity?: number | null;
+  externalContactValidFrom?: string | null;
+  externalContactValidUntil?: string | null;
   externalContactForecast?: ExternalContactForecast;
   createdAt: string;
   updatedAt: string;
@@ -34,6 +36,8 @@ export interface ExternalContactForecast {
 export interface EntityFormData {
   certificationExpiresAt?: string | null;
   externalContactCapacity?: number | null;
+  externalContactValidFrom?: string | null;
+  externalContactValidUntil?: string | null;
   name: string;
   sku?: string;
   rechargeAmount?: number;

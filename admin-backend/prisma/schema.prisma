@@ -75,6 +75,8 @@ model WecomEntity {
   servedUserCount Int? @map("served_user_count")
   servedUserCountUpdatedAt DateTime? @map("served_user_count_updated_at")
   externalContactCapacity Int? @map("external_contact_capacity")
+  externalContactValidFrom DateTime? @map("external_contact_valid_from")
+  externalContactValidUntil DateTime? @map("external_contact_valid_until")
   createdAt      DateTime  @default(now()) @map("created_at")
   updatedAt      DateTime  @updatedAt @map("updated_at")
 

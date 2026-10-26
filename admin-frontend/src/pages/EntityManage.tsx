@@ -3,12 +3,14 @@ import { Alert, DatePicker, Table, Button, Modal, Form, Grid, Input, InputNumber
 import dayjs from 'dayjs';
 import { certificationStatus } from './entityCertification';
 import { CONTACT_CAPACITY_TIERS, contactForecastDisplay } from './entityContactForecast';
+import { contactValidityDisplay, contactValidityInput, contactValidityTimestamp } from './entityContactValidity';
 import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SyncOutlined, TeamOutlined } from '@ant-design/icons';
 import { writeFile } from 'xlsx';
 import { buildEntityWorkbook } from './entityExport';
 import { getManagedEntities, createEntity, updateEntity, deleteEntity, syncEntity, syncServedUsers, getServedUserJobs, type ServedUserJob, type WecomEntity, type EntityFormData } from '../api/entities';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
+import './EntityManage.css';
 
 export default function EntityManage() {
   const [entities, setEntities] = useState<WecomEntity[]>([]);
@@ -80,6 +82,8 @@ export default function EntityManage() {
       contactCapacityChoice: entity.externalContactCapacity != null && !CONTACT_CAPACITY_TIERS.includes(entity.externalContactCapacity)
         ? 'custom' : entity.externalContactCapacity,
       customExternalContactCapacity: entity.externalContactCapacity,
+      externalContactValidFrom: contactValidityInput(entity.externalContactValidFrom),
+      externalContactValidUntil: contactValidityInput(entity.externalContactValidUntil),
     });
     setModalOpen(true);
   };
@@ -115,6 +119,8 @@ export default function EntityManage() {
         wecomApiBaseUrl: v.wecomApiBaseUrl,
         certificationExpiresAt: v.certificationExpiresAt?.format('YYYY-MM-DD') || null,
         externalContactCapacity: v.contactCapacityChoice === 'custom' ? v.customExternalContactCapacity : v.contactCapacityChoice ?? null,
+        externalContactValidFrom: contactValidityTimestamp(v.externalContactValidFrom),
+        externalContactValidUntil: contactValidityTimestamp(v.externalContactValidUntil),
       };
       if (editingId) { await updateEntity(editingId, d); message.success('更新成功'); }
       else { await createEntity(d); message.success('创建成功'); }
@@ -194,6 +200,16 @@ export default function EntityManage() {
         })()}
         {countErrors[r.id] && <span style={{ color: '#cf1322', fontSize: 12 }}>{countErrors[r.id]}</span>}
       </Space> },
+    { title: '外部联系人有效时长', key: 'externalContactValidity', width: 300,
+      sorter: (a: WecomEntity, b: WecomEntity) => contactValidityDisplay(a, now).sortTime - contactValidityDisplay(b, now).sortTime,
+      render: (_: unknown, entity: WecomEntity) => {
+        const display = contactValidityDisplay(entity, now);
+        return display.from ? <Space direction="vertical" size={4} style={{ color: display.color }}>
+          <span>自 {display.from}</span>
+          <span>续期至 {display.until}</span>
+          <span style={{ fontSize: 12, color: display.color || '#64748b' }}>{display.status}</span>
+        </Space> : <span style={{ color: '#64748b' }}>{display.label}</span>;
+      } },
     { title: '外部联系人规模预计增购时间', key: 'externalContactForecast', width: 280,
       sorter: (a: WecomEntity, b: WecomEntity) => contactForecastDisplay(a, now).sortDate.localeCompare(contactForecastDisplay(b, now).sortDate),
       render: (_: unknown, entity: WecomEntity) => {
@@ -247,7 +263,7 @@ export default function EntityManage() {
         style={{ marginBottom: 16 }} message={`认证到期预警：${expiryAlerts.length} 个主体需关注`}
         description={<Space wrap>{expiryAlerts.map(({ entity, label, color }) => <Tag key={entity.id} color={color}>{entity.name}：{label}</Tag>)}</Space>} />}
 
-      <Table dataSource={entities} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 2610 }}
+      <Table dataSource={entities} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 2910 }}
         pagination={{ pageSize: 20, showTotal: (t: number) => `共 ${t} 个主体` }} />
 
       <Modal title={editingId ? '编辑主体' : '添加主体'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} confirmLoading={submitting} destroyOnClose width={480}>
@@ -255,6 +271,20 @@ export default function EntityManage() {
           <Form.Item name="name" label="主体名称" rules={[{ required: true }]}><Input placeholder="例如：开开华彩文艺" /></Form.Item>
           <Form.Item name="sku" label="SKU"><Input placeholder="可选，如 声乐" /></Form.Item>
           <Form.Item name="certificationExpiresAt" label="企业微信主体认证到期日期"><DatePicker format="YYYY-MM-DD" style={{ width: '100%' }} placeholder="选择认证到期日期" /></Form.Item>
+          <Form.Item name="externalContactValidFrom" label="外部联系人有效期开始时间（北京时间）" dependencies={['externalContactValidUntil']}
+            rules={[({ getFieldValue }) => ({ validator: (_, value) => !value && getFieldValue('externalContactValidUntil')
+              ? Promise.reject(new Error('请选择有效期开始时间')) : Promise.resolve() })]}>
+            <DatePicker classNames={{ popup: { root: 'entity-contact-validity-popup' } }} showTime={{ format: 'HH:mm' }} format="YYYY/MM/DD HH:mm" style={{ width: '100%' }} placeholder="选择开始时间" />
+          </Form.Item>
+          <Form.Item name="externalContactValidUntil" label="外部联系人有效期截止时间（北京时间）" dependencies={['externalContactValidFrom']}
+            rules={[({ getFieldValue }) => ({ validator: (_, value) => {
+              const from = getFieldValue('externalContactValidFrom');
+              if (from && !value) return Promise.reject(new Error('请选择有效期截止时间'));
+              if (from && value && value.valueOf() <= from.valueOf()) return Promise.reject(new Error('截止时间须晚于开始时间'));
+              return Promise.resolve();
+            } })]}>
+            <DatePicker classNames={{ popup: { root: 'entity-contact-validity-popup' } }} showTime={{ format: 'HH:mm' }} format="YYYY/MM/DD HH:mm" style={{ width: '100%' }} placeholder="选择截止时间" />
+          </Form.Item>
           <Form.Item name="contactCapacityChoice" label="外部联系人规模（已购档位）">
             <Select allowClear placeholder="选择实际已购规模" options={[
               ...CONTACT_CAPACITY_TIERS.map(value => ({ value, label: `${value.toLocaleString()} 位` })),

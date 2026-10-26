@@ -7,6 +7,7 @@ import { entityManagementOnly } from '../middleware/entityManagement';
 import { syncEntityQuota } from '../services/sync';
 import { parseCertificationDate } from '../lib/certificationDate';
 import { parseExternalContactCapacity } from '../lib/externalContactForecast';
+import { parseExternalContactValidity } from '../lib/externalContactValidity';
 import { withContactForecasts } from '../services/externalContactForecasts';
 import { servedUserJobs } from '../services/servedUserJobs';
 import { getCustomerPage, getEmployeeNames } from '../services/wecom';
@@ -247,9 +248,11 @@ router.post('/:id/sync', async (req: AuthRequest, res: Response) => {
 router.post('/', entityManagementOnly, async (req: AuthRequest, res: Response) => {
   let certificationExpiresAt;
   let externalContactCapacity;
+  let externalContactValidity;
   try {
     certificationExpiresAt = parseCertificationDate(req.body.certificationExpiresAt);
     externalContactCapacity = parseExternalContactCapacity(req.body.externalContactCapacity);
+    externalContactValidity = parseExternalContactValidity(req.body.externalContactValidFrom, req.body.externalContactValidUntil);
   }
   catch (error) { return res.status(400).json({ error: (error as Error).message }); }
   try {
@@ -261,6 +264,7 @@ router.post('/', entityManagementOnly, async (req: AuthRequest, res: Response) =
         name, sku: sku || null, corpid, secret, wecomApiBaseUrl: wecomApiBaseUrl || null,
         certificationExpiresAt,
         externalContactCapacity,
+        ...externalContactValidity,
         rechargeAmount: Number(rechargeAmount || 0),
         monthlyBudget: Number(monthlyBudget || 0),
         quotaTotal: Number(quotaTotal || 0),
@@ -276,9 +280,11 @@ router.post('/', entityManagementOnly, async (req: AuthRequest, res: Response) =
 router.put('/:id', entityManagementOnly, async (req: AuthRequest, res: Response) => {
   let certificationExpiresAt;
   let externalContactCapacity;
+  let externalContactValidity;
   try {
     certificationExpiresAt = parseCertificationDate(req.body.certificationExpiresAt);
     externalContactCapacity = parseExternalContactCapacity(req.body.externalContactCapacity);
+    externalContactValidity = parseExternalContactValidity(req.body.externalContactValidFrom, req.body.externalContactValidUntil);
   }
   catch (error) { return res.status(400).json({ error: (error as Error).message }); }
   try {
@@ -287,7 +293,7 @@ router.put('/:id', entityManagementOnly, async (req: AuthRequest, res: Response)
     const current = await prisma.wecomEntity.findUnique({ where: { id } });
     if (!current) return res.status(404).json({ error: '主体不存在' });
 
-    const data: any = { name, sku, corpid, secret, status };
+    const data: any = { name, sku, corpid, secret, status, ...externalContactValidity };
     if (certificationExpiresAt !== undefined) data.certificationExpiresAt = certificationExpiresAt;
     if (externalContactCapacity !== undefined) data.externalContactCapacity = externalContactCapacity;
     if (wecomApiBaseUrl !== undefined) data.wecomApiBaseUrl = wecomApiBaseUrl || null;

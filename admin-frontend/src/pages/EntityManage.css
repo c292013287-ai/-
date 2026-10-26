@@ -1,0 +1,31 @@
+@media (max-width: 480px) {
+  .entity-contact-validity-popup {
+    position: fixed !important;
+    inset: auto auto 8px 50% !important;
+    transform: translateX(-50%) !important;
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+  }
+
+  .entity-contact-validity-popup .ant-picker-panel-container {
+    width: min(320px, calc(100vw - 16px));
+  }
+
+  .entity-contact-validity-popup .ant-picker-date-panel,
+  .entity-contact-validity-popup .ant-picker-content {
+    width: 100%;
+  }
+
+  .entity-contact-validity-popup .ant-picker-datetime-panel {
+    flex-direction: column;
+  }
+
+  .entity-contact-validity-popup .ant-picker-time-panel {
+    border-inline-start: 0;
+    border-top: 1px solid #f0f0f0;
+  }
+
+  .entity-contact-validity-popup .ant-picker-time-panel-column {
+    height: 120px;
+  }
+}
