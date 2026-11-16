@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Card, Form, Input, Modal, Space, Table, Tag, Typography, message } from 'antd';
 import { ArrowLeftOutlined, CopyOutlined, ExportOutlined, LinkOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import {useAccess} from '../lib/access';
 import dayjs from 'dayjs';
 import { getFeishuMigrationRecords, getMigrationSyncError } from '../api/migration';
 import MigrationBindings from './MigrationBindings';
@@ -120,6 +121,8 @@ function parseFeishuCsv(raw: string): MigrationRecord[] {
 }
 
 export default function UserMigrationCollect() {
+  const {admin,can}=useAccess();
+  if(!admin&&!can('migrationCollect'))return <Alert type="error" message="无权访问采集信息"/>;
   const navigate = useNavigate();
   const [linkForm] = Form.useForm<LinkFormValues>();
   const [formConfig, setFormConfig] = useState(() => loadFeishuFormConfig());

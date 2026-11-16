@@ -180,7 +180,9 @@ test('operators can process only mapped and granted records from the approved so
     assert.equal(result.records[0].fields.迁移账号绑定手机号,'已脱敏');
     assert.equal(result.records[0].fields.secret,undefined);
     assert.equal((await fetch(endpoint+'?tableId=other',{headers})).status,403);
-    assert.equal((await fetch(base,{headers})).status,403);
+    assert.equal((await fetch(base+'?appToken=other&tableId=other',{headers})).status,403);
+    const collected=await fetch(base+'?appToken=wiki-test&tableId=operator-test&viewId=approved',{headers});
+    assert.deepEqual((await collected.json()).records.map(r=>r.recordId),['r0']);
     const patch = (id,fields,key=result.accessKey) => fetch(base+'/'+id+'?accessKey='+key,{method:'PATCH',headers,body:JSON.stringify({fields})});
     assert.equal((await patch('r0',{备注:'x'},'expired')).status,403);
     assert.equal((await patch('r1',{备注:'x'})).status,403);

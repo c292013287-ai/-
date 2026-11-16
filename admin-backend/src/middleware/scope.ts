@@ -17,7 +17,8 @@ export function allowed(req: AuthRequest) {
   if (area === 'migration') return can('migration') && (
     m === 'GET' && p === '/feishu/snapshot' || m === 'POST' && p === '/feishu/sync'
     || m === 'PATCH' && /^\/feishu\/records\/[a-zA-Z0-9_-]{1,100}$/.test(p)
-  ) || area === 'migration' && can('migrationBinding') && (
+  ) || area === 'migration' && can('migrationCollect') && m === 'GET' && p === '/feishu/records'
+    || area === 'migration' && can('migrationBinding') && (
     m === 'GET' && p === '/operator-source/mappings' || m === 'PUT' && p === '/operator-source/mappings'
   );
   if (area === 'announcements') return !p && m === 'GET';

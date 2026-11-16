@@ -613,7 +613,7 @@ export default function UserMigration() {
           <Space wrap>
             <Button icon={<SaveOutlined />} loading={syncing} onClick={handleSaveAndSync}>保存并同步</Button>
             {!admin&&can('migrationBinding')&&<MigrationOperatorBindings/>}
-            {admin && <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/migration/collect')}>采集信息</Button>}
+            {(admin||can('migrationCollect')) && <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/migration/collect')}>采集信息</Button>}
           </Space>
         )}
       />

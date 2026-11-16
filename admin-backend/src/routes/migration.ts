@@ -309,7 +309,16 @@ router.get('/feishu/records', async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: '缺少 appToken 或 tableId' });
     }
 
-    const records = await sharedRecords({ appToken, tableId, viewId });
+    const source={appToken,tableId,viewId};
+    let records = await sharedRecords(source);
+    if(req.userRole!=='admin'){
+      const access=await readAccess();
+      if(!access||JSON.stringify(access.source)!==JSON.stringify(source))return res.status(403).json({error:'只能读取管理员配置的迁移源表'});
+      records=scopedRows(records,access.bindings,req.entityIds??[]).map(row=>({...row,fields:Object.fromEntries(
+        Object.entries(row.fields).filter(([key])=>operatorColumns.has(key)).map(([key,value])=>
+          [key,key.includes('手机号')&&value&&!req.permissions?.includes('phone')?'已脱敏':value])
+      )}));
+    }
     res.setHeader('Cache-Control', 'no-store');
     res.json({ records });
   } catch (error) {
