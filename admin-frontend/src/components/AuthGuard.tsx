@@ -5,11 +5,13 @@ import { useAuthStore } from '../store/authStore';
 import { getCurrentUser } from '../api/auth';
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, setAuth, loadFromStorage } = useAuthStore();
+  const { isAuthenticated, setAuth, logout, loadFromStorage } = useAuthStore();
   const [checking, setChecking] = useState(true);
   const location = useLocation();
 
   useEffect(() => {
+    const onStorage=(event:StorageEvent)=>{ if(event.key==='token' || event.key===null){sessionStorage.removeItem('entity_access_token');window.location.reload();} };
+    window.addEventListener('storage',onStorage);
     loadFromStorage();
     const token = localStorage.getItem('token');
 
@@ -17,13 +19,13 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
       getCurrentUser()
         .then((user) => setAuth(token, user))
         .catch(() => {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
+          logout();
         })
         .finally(() => setChecking(false));
     } else {
       setChecking(false);
     }
+    return ()=>window.removeEventListener('storage',onStorage);
   }, []);
 
   if (checking) {

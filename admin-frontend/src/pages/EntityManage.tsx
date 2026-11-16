@@ -1,3 +1,5 @@
+import {recordOperation} from '../api/auth';
+import {useAccess} from '../lib/access';
 import { useEffect, useState } from 'react';
 import { Alert, DatePicker, Table, Button, Modal, Form, Grid, Input, InputNumber, Select, Space, Tag, Tooltip, Popconfirm, message } from 'antd';
 import dayjs from 'dayjs';
@@ -13,6 +15,7 @@ import StatCard from '../components/StatCard';
 import './EntityManage.css';
 
 export default function EntityManage() {
+  const {admin,can}=useAccess();
   const [entities, setEntities] = useState<WecomEntity[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -76,7 +79,7 @@ export default function EntityManage() {
       name: entity.name,
       sku: entity.sku,
       corpid: entity.corpid,
-      secret: entity.secret,
+      secret: undefined,
       wecomApiBaseUrl: entity.wecomApiBaseUrl,
       certificationExpiresAt: entity.certificationExpiresAt ? dayjs(entity.certificationExpiresAt.slice(0, 10)) : null,
       contactCapacityChoice: entity.externalContactCapacity != null && !CONTACT_CAPACITY_TIERS.includes(entity.externalContactCapacity)
@@ -115,14 +118,14 @@ export default function EntityManage() {
         name: v.name,
         sku: v.sku,
         corpid: v.corpid,
-        secret: v.secret,
+        secret: v.secret || undefined,
         wecomApiBaseUrl: v.wecomApiBaseUrl,
         certificationExpiresAt: v.certificationExpiresAt?.format('YYYY-MM-DD') || null,
         externalContactCapacity: v.contactCapacityChoice === 'custom' ? v.customExternalContactCapacity : v.contactCapacityChoice ?? null,
         externalContactValidFrom: contactValidityTimestamp(v.externalContactValidFrom),
         externalContactValidUntil: contactValidityTimestamp(v.externalContactValidUntil),
       };
-      if (editingId) { await updateEntity(editingId, d); message.success('更新成功'); }
+      if (editingId) { await updateEntity(editingId, admin?d:{certificationExpiresAt:d.certificationExpiresAt,externalContactCapacity:d.externalContactCapacity,externalContactValidFrom:d.externalContactValidFrom,externalContactValidUntil:d.externalContactValidUntil}); message.success('更新成功'); }
       else { await createEntity(d); message.success('创建成功'); }
       setModalOpen(false); fetchData();
     } catch (e: any) { if (!e?.errorFields) message.error(e.response?.data?.error || '操作失败'); }
@@ -143,10 +146,11 @@ export default function EntityManage() {
     } finally { setSubmittingCounts(current => current.filter(id => id !== entity.id)); }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (loading || loadError || !entities.length) return;
     setDownloading(true);
     try {
+      await recordOperation('entities');
       writeFile(buildEntityWorkbook(entities), `主体管理_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
       message.success('已生成主体管理 Excel');
     } catch {
@@ -228,12 +232,12 @@ export default function EntityManage() {
     { title: '操作', key: 'action', width: 350, fixed: screens.md ? 'right' as const : undefined,
       render: (_: any, r: WecomEntity) => (
         <Space size={6}>
-          <Button size="small" icon={<SyncOutlined />} onClick={() => handleSync(r.id, r.name)}>同步</Button>
-          <Button size="small" icon={<TeamOutlined />} loading={submittingCounts.includes(r.id)}
+          {can('sync') && <Button size="small" icon={<SyncOutlined />} onClick={() => handleSync(r.id, r.name)}>同步</Button>}
+          {can('sync') && <Button size="small" icon={<TeamOutlined />} loading={submittingCounts.includes(r.id)}
             disabled={jobs.some(job => job.entityId === r.id && ['queued', 'running'].includes(job.status))}
-            onClick={() => handleCount(r)}>统计人数</Button>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>
-          <Popconfirm
+            onClick={() => handleCount(r)}>统计人数</Button>}
+          {can('editEntity') && <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>编辑</Button>}
+          {admin && <Popconfirm
             title="确认删除主体？"
             description={`删除「${r.name}」后无法恢复，关联记录也会一并删除。`}
             okText="确认删除"
@@ -242,7 +246,7 @@ export default function EntityManage() {
             onConfirm={() => handleDelete(r)}
           >
             <Button danger size="small" icon={<DeleteOutlined />} loading={deletingId === r.id}>删除</Button>
-          </Popconfirm>
+          </Popconfirm>}
         </Space>
       )},
   ];
@@ -250,7 +254,7 @@ export default function EntityManage() {
   return (
     <div>
       <PageHeader title="主体管理" desc="管理企微获客主体配置与同步状态"
-        extra={<Space wrap><Button icon={<DownloadOutlined />} onClick={handleDownload} loading={downloading} disabled={loading || !!loadError || !entities.length}>下载 Excel</Button><Button icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button><Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>添加主体</Button></Space>} />
+        extra={<Space wrap>{admin && <Button icon={<DownloadOutlined />} onClick={handleDownload} loading={downloading} disabled={loading || !!loadError || !entities.length}>下载 Excel</Button>}<Button icon={<ReloadOutlined />} onClick={fetchData}>刷新</Button>{admin && <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>添加主体</Button>}</Space>} />
 
       {loadError && <Alert type="error" showIcon message={loadError} style={{ marginBottom: 16 }} action={<Button onClick={fetchData}>重试</Button>} />}
       {progressError && <Alert type="warning" showIcon message={progressError} style={{ marginBottom: 16 }} />}
@@ -268,8 +272,8 @@ export default function EntityManage() {
 
       <Modal title={editingId ? '编辑主体' : '添加主体'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} confirmLoading={submitting} destroyOnClose width={480}>
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item name="name" label="主体名称" rules={[{ required: true }]}><Input placeholder="例如：开开华彩文艺" /></Form.Item>
-          <Form.Item name="sku" label="SKU"><Input placeholder="可选，如 声乐" /></Form.Item>
+          <Form.Item name="name" hidden={!admin} label="主体名称" rules={[{ required: true }]}><Input placeholder="例如：开开华彩文艺" /></Form.Item>
+          <Form.Item name="sku" hidden={!admin} label="SKU"><Input placeholder="可选，如 声乐" /></Form.Item>
           <Form.Item name="certificationExpiresAt" label="企业微信主体认证到期日期"><DatePicker format="YYYY-MM-DD" style={{ width: '100%' }} placeholder="选择认证到期日期" /></Form.Item>
           <Form.Item name="externalContactValidFrom" label="外部联系人有效期开始时间（北京时间）" dependencies={['externalContactValidUntil']}
             rules={[({ getFieldValue }) => ({ validator: (_, value) => !value && getFieldValue('externalContactValidUntil')
@@ -294,9 +298,9 @@ export default function EntityManage() {
           {capacityChoice === 'custom' && <Form.Item name="customExternalContactCapacity" label="已购规模人数" rules={[{ required: true, message: '请输入已购规模人数' }]}>
             <InputNumber min={2000000} max={2147483647} precision={0} style={{ width: '100%' }} placeholder="至少 2,000,000 位" />
           </Form.Item>}
-          <Form.Item name="corpid" label="企业ID" rules={[{ required: true }]}><Input placeholder="wwxxxxxxxxxxxxxx" /></Form.Item>
-          <Form.Item name="secret" label="应用Secret" rules={[{ required: true }]}><Input.Password placeholder="获客助手应用的Secret" /></Form.Item>
-          <Form.Item name="wecomApiBaseUrl" label="同步出口地址">
+          <Form.Item name="corpid" hidden={!admin} label="企业ID" rules={[{ required: true }]}><Input placeholder="wwxxxxxxxxxxxxxx" /></Form.Item>
+          <Form.Item name="secret" hidden={!admin} label="应用Secret" rules={[{ required: !editingId }]}><Input.Password placeholder={editingId?"留空保留原密钥":"请输入应用密钥"} /></Form.Item>
+          <Form.Item name="wecomApiBaseUrl" hidden={!admin} label="同步出口地址">
             <Input placeholder="可选，例如 http://47.95.226.204:8088" />
           </Form.Item>
         </Form>

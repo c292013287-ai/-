@@ -57,7 +57,6 @@ export default function Login() {
           name="login"
           onFinish={onFinish}
           size="large"
-          initialValues={{ username: 'admin', password: 'admin123' }}
         >
           <Form.Item
             name="username"
@@ -80,9 +79,7 @@ export default function Login() {
           </Form.Item>
         </Form>
 
-        <Text type="secondary" style={{ display: 'block', textAlign: 'center', fontSize: 12 }}>
-          默认账号: admin / admin123
-        </Text>
+
       </Card>
     </div>
   );

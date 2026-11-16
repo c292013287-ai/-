@@ -1,3 +1,4 @@
+import {useAccess} from '../lib/access';
 import { useEffect, useState } from 'react';
 import { Table, Tag, Button, message, Select, Statistic, Alert } from 'antd';
 import { SyncOutlined, ThunderboltOutlined, WarningOutlined } from '@ant-design/icons';
@@ -10,6 +11,7 @@ const statusMap: Record<string, { color: string; text: string }> = {
 };
 
 export default function Dashboard() {
+  const {admin}=useAccess();
   const [data, setData] = useState<BudgetRow[]>([]);
   const [summary, setSummary] = useState<BudgetSummary>({ todayConsumption: 0 });
   const [loading, setLoading] = useState(true);
@@ -61,7 +63,7 @@ export default function Dashboard() {
   return (
     <div>
       <PageHeader title="资源预警" desc="获客助手余额监控与预计剩余消耗天数预警"
-        extra={<Button icon={<SyncOutlined spin={syncing} />} loading={syncing} onClick={handleSyncAll}>同步数据</Button>} />
+        extra={admin && <Button icon={<SyncOutlined spin={syncing} />} loading={syncing} onClick={handleSyncAll}>同步数据</Button>} />
 
       <div className="summary-grid">
         <div className="summary-panel" style={{ background: 'linear-gradient(135deg, #e6f7ff 0%, #f0f5ff 100%)', borderColor: '#d6e4ff' }}>

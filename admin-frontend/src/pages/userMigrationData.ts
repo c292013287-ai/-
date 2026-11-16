@@ -1,3 +1,4 @@
+import {accountCacheKey} from '../lib/accountCache';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import type { FeishuRecord } from '../api/migration';
@@ -65,7 +66,7 @@ export const statusColor: Record<MigrationStatus, string> = {
 
 export function loadMigrationRecords(): MigrationRecord[] {
   try {
-    const raw = localStorage.getItem(MIGRATION_STORAGE_KEY);
+    const raw = localStorage.getItem(accountCacheKey(MIGRATION_STORAGE_KEY));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
@@ -75,12 +76,12 @@ export function loadMigrationRecords(): MigrationRecord[] {
 }
 
 export function saveMigrationRecords(records: MigrationRecord[]) {
-  localStorage.setItem(MIGRATION_STORAGE_KEY, JSON.stringify(records));
+  localStorage.setItem(accountCacheKey(MIGRATION_STORAGE_KEY), JSON.stringify(records));
 }
 
 function loadDeletedMigrationSourceIds() {
   try {
-    const raw = localStorage.getItem(DELETED_MIGRATION_SOURCE_IDS_KEY);
+    const raw = localStorage.getItem(accountCacheKey(DELETED_MIGRATION_SOURCE_IDS_KEY));
     const parsed = raw ? JSON.parse(raw) : [];
     return new Set<string>(Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : []);
   } catch {
@@ -93,15 +94,15 @@ export function markMigrationRecordDeleted(record: MigrationRecord) {
 
   const deletedSourceIds = loadDeletedMigrationSourceIds();
   deletedSourceIds.add(record.sourceRecordId);
-  localStorage.setItem(DELETED_MIGRATION_SOURCE_IDS_KEY, JSON.stringify([...deletedSourceIds]));
+  localStorage.setItem(accountCacheKey(DELETED_MIGRATION_SOURCE_IDS_KEY), JSON.stringify([...deletedSourceIds]));
 }
 
 export function loadFeishuFormLink() {
-  return localStorage.getItem(FEISHU_FORM_LINK_KEY) || '';
+  return localStorage.getItem(accountCacheKey(FEISHU_FORM_LINK_KEY)) || '';
 }
 
 export function saveFeishuFormLink(link: string) {
-  localStorage.setItem(FEISHU_FORM_LINK_KEY, link.trim());
+  localStorage.setItem(accountCacheKey(FEISHU_FORM_LINK_KEY), link.trim());
 }
 
 export interface FeishuFormConfig {
@@ -113,7 +114,7 @@ export interface FeishuFormConfig {
 
 export function loadFeishuFormConfig(): FeishuFormConfig {
   try {
-    const raw = localStorage.getItem(FEISHU_FORM_CONFIG_KEY);
+    const raw = localStorage.getItem(accountCacheKey(FEISHU_FORM_CONFIG_KEY));
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<FeishuFormConfig>;
       return {
@@ -136,7 +137,7 @@ export function saveFeishuFormConfig(config: FeishuFormConfig) {
     tableId: config.tableId.trim(),
     viewId: config.viewId?.trim() || '',
   };
-  localStorage.setItem(FEISHU_FORM_CONFIG_KEY, JSON.stringify(nextConfig));
+  localStorage.setItem(accountCacheKey(FEISHU_FORM_CONFIG_KEY), JSON.stringify(nextConfig));
   saveFeishuFormLink(nextConfig.formLink);
 }
 

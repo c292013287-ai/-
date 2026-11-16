@@ -4,6 +4,8 @@ import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
 import { AuthRequest, authMiddleware } from '../middleware/auth';
 import { entityManagementOnly } from '../middleware/entityManagement';
+import { scopedIds } from '../middleware/scope';
+import { audit } from '../lib/securityAudit';
 import { syncEntityQuota } from '../services/sync';
 import { parseCertificationDate } from '../lib/certificationDate';
 import { parseExternalContactCapacity } from '../lib/externalContactForecast';
@@ -18,6 +20,8 @@ import { callbackConfig } from './customerCallbacks';
 import { csvCell } from '../lib/customerSnapshotStore';
 import { once } from 'node:events';
 
+function visibleJobs<T extends {entityId:number}>(req:AuthRequest, jobs:T[]) {return jobs.filter(j=>req.userRole==='admin'||req.entityIds?.includes(j.entityId));}
+function phones(req:AuthRequest, list?:string[]) {return req.permissions?.includes('phone')?list:list?.map(()=> '已脱敏');}
 const router = Router();
 router.use(authMiddleware);
 
@@ -30,8 +34,10 @@ router.post('/access', async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const managementUsername = process.env.ENTITY_MANAGEMENT_USERNAME;
-    const managementPasswordHash = process.env.ENTITY_MANAGEMENT_PASSWORD_HASH;
+    const own = req.userRole !== 'admin' ? await prisma.user.findUnique({where:{id:req.userId},select:{username:true,password:true}}) : null;
+    if (req.userRole !== 'admin' && !own) return res.status(403).json({error:'账号不可用'});
+    const managementUsername = own?.username ?? process.env.ENTITY_MANAGEMENT_USERNAME;
+    const managementPasswordHash = own?.password ?? process.env.ENTITY_MANAGEMENT_PASSWORD_HASH;
     if (!managementUsername || !managementPasswordHash) {
       res.status(503).json({ error: '主体管理专用账号尚未配置' });
       return;
@@ -46,8 +52,8 @@ router.post('/access', async (req: AuthRequest, res: Response) => {
     }
 
     const accessToken = jwt.sign(
-      { userId: req.userId, scope: 'entity-management' },
-      process.env.JWT_SECRET || 'default-secret',
+      { userId: req.userId, scope: 'entity-management', version:req.sessionVersion },
+      process.env.JWT_SECRET!,
       { expiresIn: '2h' },
     );
     res.json({ accessToken, expiresIn: 2 * 60 * 60 });
@@ -65,7 +71,7 @@ router.get('/access', entityManagementOnly, (_req: AuthRequest, res: Response) =
 router.get('/', async (_req: AuthRequest, res: Response) => {
   try {
     res.json(await prisma.wecomEntity.findMany({
-      orderBy: { createdAt: 'desc' },
+      where:{id:scopedIds(_req)}, orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         name: true,
@@ -87,14 +93,15 @@ router.get('/', async (_req: AuthRequest, res: Response) => {
 // GET /api/entities/manage - 主体管理完整列表
 router.get('/manage', entityManagementOnly, async (_req: AuthRequest, res: Response) => {
   try {
-    res.json(await withContactForecasts(await prisma.wecomEntity.findMany({ orderBy: { createdAt: 'desc' } })));
+    const rows=await withContactForecasts(await prisma.wecomEntity.findMany({where:{id:scopedIds(_req)},orderBy:{createdAt:'desc'}}));
+    res.json(rows.map(({secret,...row})=>row));
   } catch {
     res.status(500).json({ error: '获取主体列表失败' });
   }
 });
 
 router.get('/served-users/jobs', entityManagementOnly, (_req: AuthRequest, res: Response) => {
-  res.json(servedUserJobs.list());
+  res.json(visibleJobs(_req, servedUserJobs.list()));
 });
 
 router.get('/:id/customers/live-status', entityManagementOnly, async (req, res) => {
@@ -107,16 +114,16 @@ router.get('/:id/customers/live-status', entityManagementOnly, async (req, res) 
 
 router.get('/customers/jobs', entityManagementOnly, async (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
-  res.json(await customerSyncJobs.status());
+  res.json(visibleJobs(_req, await customerSyncJobs.status()));
 });
 
 router.post('/customers/sync', entityManagementOnly, async (req, res) => {
   const id = req.body?.entityId;
   if (id !== undefined && (!Number.isSafeInteger(id) || id <= 0)) return res.status(400).json({ error: '主体ID无效' });
   try {
-    const entities = await prisma.wecomEntity.findMany({ where: { status: 'active', ...(id === undefined ? {} : { id }) }, select: { id: true } });
+    const entities = await prisma.wecomEntity.findMany({ where: { status: 'active', id:scopedIds(req as AuthRequest,id) }, select: { id: true } });
     if (!entities.length) return res.status(404).json({ error: '没有可同步的启用主体' });
-    res.status(202).json(await customerSyncJobs.start(entities.map(entity => entity.id)));
+    res.status(202).json(visibleJobs(req, await customerSyncJobs.start(entities.map(entity => entity.id))));
   } catch { res.status(500).json({ error: '启动用户同步失败' }); }
 });
 
@@ -142,13 +149,14 @@ router.get('/:id/customers/export', entityManagementOnly, async (req, res) => {
   const controller = new AbortController();
   res.on('close', () => controller.abort());
   try {
+    await audit((req as AuthRequest).userId!, '申请导出客户', String(id));
     const rows = await customerSyncJobs.exportRows(id, filters, controller.signal);
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="customers-${id}.csv"`);
     res.write('\uFEFF' + ['客户名称', '头像链接', '性别', '客户备注', '备注手机号', '客户标签', '添加来源代码', '渠道标记', '类型', '企业', '员工ID', '添加时间', '描述', 'external_userid', 'unionid'].map(csvCell).join(',') + '\r\n');
     for await (const item of rows) {
-      const line = [item.name, item.avatar, item.gender === 1 ? '男' : item.gender === 2 ? '女' : '未知', item.remark, item.remarkMobiles?.join('\n'), item.tags?.map((tag: any) => tag.name || tag.id).join('\n'), item.addWay, item.state, item.type === 1 ? '微信客户' : '企业微信客户', item.company, item.userId, item.addedAt == null ? '' : new Date(item.addedAt * 1000).toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai' }), item.description, item.externalUserId, item.unionId].map(csvCell).join(',') + '\r\n';
+      const line = [item.name, item.avatar, item.gender === 1 ? '男' : item.gender === 2 ? '女' : '未知', item.remark, phones(req,item.remarkMobiles)?.join('\n'), item.tags?.map((tag: any) => tag.name || tag.id).join('\n'), item.addWay, item.state, item.type === 1 ? '微信客户' : '企业微信客户', item.company, item.userId, item.addedAt == null ? '' : new Date(item.addedAt * 1000).toLocaleString('sv-SE', { timeZone: 'Asia/Shanghai' }), item.description, item.externalUserId, item.unionId].map(csvCell).join(',') + '\r\n';
       if (!res.write(line)) await once(res, 'drain', { signal: controller.signal });
     }
     res.end();
@@ -168,7 +176,8 @@ router.get('/:id/customers/snapshot', entityManagementOnly, async (req, res) => 
   const controller = new AbortController(); res.on('close', () => controller.abort());
   try {
     res.setHeader('Cache-Control', 'no-store');
-    res.json(await customerSyncJobs.snapshot(id, filters, page, pageSize, controller.signal));
+    const snapshot=await customerSyncJobs.snapshot(id, filters, page, pageSize, controller.signal);
+    res.json(snapshot && {...snapshot, items:snapshot.items.map(item=>({...item,remarkMobiles:phones(req,item.remarkMobiles)}))});
   } catch { if (!res.destroyed) res.status(500).json({ error: '读取服务器用户数据失败' }); }
 });
 
@@ -206,7 +215,7 @@ router.get('/:id', entityManagementOnly, async (req: AuthRequest, res: Response)
   try {
     const entity = await prisma.wecomEntity.findUnique({ where: { id: Number(req.params.id) } });
     if (!entity) return res.status(404).json({ error: '主体不存在' });
-    res.json(entity);
+    const {secret,...safe}=entity; res.json(safe);
   } catch {
     res.status(500).json({ error: '获取主体详情失败' });
   }
@@ -225,7 +234,7 @@ router.post('/:id/served-users/sync', entityManagementOnly, async (req: AuthRequ
   }
 });
 
-router.post('/:id/sync', async (req: AuthRequest, res: Response) => {
+router.post('/:id/sync', (req:AuthRequest,res,next)=>req.userRole==='admin'?next():entityManagementOnly(req,res,next), async (req: AuthRequest, res: Response) => {
   try {
     const entity = await prisma.wecomEntity.findUnique({ where: { id: Number(req.params.id) } });
     if (!entity) return res.status(404).json({ error: '主体不存在' });
@@ -259,7 +268,7 @@ router.post('/', entityManagementOnly, async (req: AuthRequest, res: Response) =
     const { name, sku, corpid, secret, quotaTotal, rechargeAmount, monthlyBudget, wecomApiBaseUrl } = req.body;
     if (!name || !corpid || !secret) return res.status(400).json({ error: '名称、企业ID和Secret为必填项' });
 
-    res.status(201).json(await prisma.wecomEntity.create({
+    const created=await prisma.wecomEntity.create({
       data: {
         name, sku: sku || null, corpid, secret, wecomApiBaseUrl: wecomApiBaseUrl || null,
         certificationExpiresAt,
@@ -270,7 +279,8 @@ router.post('/', entityManagementOnly, async (req: AuthRequest, res: Response) =
         quotaTotal: Number(quotaTotal || 0),
         quotaBalance: Number(quotaTotal || 0),
       },
-    }));
+    });
+    const {secret: _secret,...safe}=created; res.status(201).json(safe);
   } catch {
     res.status(500).json({ error: '创建主体失败' });
   }
@@ -306,7 +316,7 @@ router.put('/:id', entityManagementOnly, async (req: AuthRequest, res: Response)
       data.servedUserCount = null;
       data.servedUserCountUpdatedAt = null;
     }
-    res.json(await prisma.wecomEntity.update({ where: { id }, data }));
+    const {secret: _secret,...safe}=await prisma.wecomEntity.update({where:{id},data}); res.json(safe);
   } catch {
     res.status(500).json({ error: '更新主体失败' });
   }

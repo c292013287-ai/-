@@ -22,7 +22,7 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 403 && error.config?.headers?.['X-Entity-Access-Token']) {
+    if (error.response?.status === 403 && error.response?.data?.code === 'REVERIFY') {
       sessionStorage.removeItem('entity_access_token');
       window.dispatchEvent(new Event('entity-access-expired'));
     }

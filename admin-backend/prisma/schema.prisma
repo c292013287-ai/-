@@ -12,7 +12,9 @@ model User {
   username  String   @unique
   password  String
   name      String
-  role      String   @default("admin")
+  role      String   @default("viewer")
+  sessionVersion Int @default(0) @map("session_version")
+  grants UserEntityGrant[]
   status    String   @default("active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -84,8 +86,34 @@ model WecomEntity {
   syncLogs  SyncLog[]
   recharges RechargeRecord[]
   servedUserDailyStats ServedUserDailyStat[]
+  grants UserEntityGrant[]
 
   @@map("wecom_entities")
+}
+
+model UserEntityGrant {
+  userId Int @map("user_id")
+  entityId Int @map("entity_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entity WecomEntity @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  @@id([userId, entityId])
+  @@map("user_entity_grants")
+}
+
+model RolePolicy {
+  role String @id @db.VarChar(32)
+  permissions Json
+  @@map("role_policies")
+}
+
+model SecurityEvent {
+  id Int @id @default(autoincrement())
+  actor Int
+  action String @db.VarChar(64)
+  target String @db.VarChar(80)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([createdAt])
+  @@map("security_events")
 }
 
 model ServedUserDailyStat {

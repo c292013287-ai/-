@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mergeMigrationRecords, migrationRecordFromFeishu, DELETED_MIGRATION_SOURCE_IDS_KEY } from '../src/pages/userMigrationData.ts';
 
-const store = new Map();
-globalThis.localStorage = { getItem: key => store.get(key) ?? null };
+const store = new Map([['user',JSON.stringify({id:1,role:'admin'})]]);
+globalThis.localStorage = { getItem: key => store.get(key) ?? null, setItem:(k,v)=>store.set(k,v), removeItem:k=>store.delete(k) };
 const row = (id, fields = {}) => migrationRecordFromFeishu({ recordId: id, fields });
 
 test('fresh source fields replace cached count, handler and remarks, including cleared values', () => {

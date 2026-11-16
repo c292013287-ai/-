@@ -4,6 +4,7 @@ import { ArrowLeftOutlined, CopyOutlined, ExportOutlined, LinkOutlined, ReloadOu
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { getFeishuMigrationRecords, getMigrationSyncError } from '../api/migration';
+import MigrationBindings from './MigrationBindings';
 import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 import {
@@ -312,6 +313,7 @@ export default function UserMigrationCollect() {
           </div>
           <Space wrap>
             <Button type="primary" icon={<SaveOutlined />} loading={syncing} onClick={handleSaveLink}>保存并同步</Button>
+            <MigrationBindings config={formConfig}/>
             <Button icon={<CopyOutlined />} onClick={handleCopy}>复制链接</Button>
             <Button icon={<LinkOutlined />} disabled={!formConfig.formLink} onClick={() => window.open(formConfig.formLink, '_blank', 'noopener,noreferrer')}>打开采集表</Button>
             <Button icon={<ReloadOutlined />} loading={syncing} onClick={() => syncFeishuRecords()}>刷新提交信息</Button>

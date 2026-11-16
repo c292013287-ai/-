@@ -1,3 +1,5 @@
+import {recordOperation} from '../api/auth';
+import {useAccess} from '../lib/access';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Avatar, Button, Collapse, DatePicker, Empty, Input, Select, Space, Table, Tag, Tooltip, message } from 'antd';
 import { DownloadOutlined, ReloadOutlined, UserOutlined } from '@ant-design/icons';
@@ -14,6 +16,7 @@ import { getEntities, getEmployeeNames, getCustomerSnapshot, getCustomerLiveStat
 const errorText = (error: unknown) => (error as { response?: { data?: { error?: string } } })?.response?.data?.error || (error instanceof Error ? error.message : '加载失败，请重试');
 
 function CustomerList({ entityId, entityName, ownerId, job, onSync }: { entityId: number; entityName: string; ownerId: number; job?: CustomerSyncJob; onSync: (id?: number) => Promise<void> }) {
+  const {admin,can}=useAccess();
   const preferenceKey = `customer-selection:${ownerId}:${entityId}`;
   const [users, setUsers] = useState<string[]>([]);
   const [employeeNames, setEmployeeNames] = useState<Record<string, string>>({});
@@ -93,13 +96,14 @@ function CustomerList({ entityId, entityName, ownerId, job, onSync }: { entityId
     setExporting(true);
     try {
       const safeName = entityName.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 60);
-      if (total > 10000) {
+      if (!admin || total > 10000) {
         const blob = await downloadCustomerCsv(entityId, queryFilters);
         const url = URL.createObjectURL(blob); const anchor = document.createElement('a');
         anchor.href = url; anchor.download = `用户管理_${safeName}_${dayjs().format('YYYYMMDD_HHmmss')}.csv`;
         anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
         message.success('已下载全部筛选结果'); return;
       }
+      await recordOperation('customers',entityId);
       const rows: Customer[] = [];
       for (let current = 1; rows.length < total; current++) {
         const snapshot = await getCustomerSnapshot(entityId, { ...queryFilters, page: current, pageSize: 100 });
@@ -128,7 +132,7 @@ function CustomerList({ entityId, entityName, ownerId, job, onSync }: { entityId
         style={{ width: 280, maxWidth: '100%' }} placeholder="选择员工"
         options={employees}
         onChange={id => { setPage(1); setUserId(id); }} />
-      <Button icon={<DownloadOutlined />} loading={exporting} disabled={!completed || cacheLoading || !total} onClick={() => void download()}>{total > 10000 ? '下载 CSV' : '下载 Excel'}</Button>
+      {can("exportCustomers") && <Button icon={<DownloadOutlined />} loading={exporting} disabled={!completed || cacheLoading || !total} onClick={() => void download()}>{!admin || total > 10000 ? '下载 CSV' : '下载 Excel'}</Button>}
     </div>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 12, marginBottom: 16 }}>
       {([
@@ -145,7 +149,7 @@ function CustomerList({ entityId, entityName, ownerId, job, onSync }: { entityId
         onChange={value => { setFilters(current => ({ ...current, startDate: value?.[0]?.format('YYYY-MM-DD'), endDate: value?.[1]?.format('YYYY-MM-DD') })); setPage(1); }} /></label>
     </div>
     {loading && <Alert type="info" showIcon message={`${job?.status === 'queued' ? '等待同步' : '后台同步中'}：员工 ${job?.employees || 0}/${job?.totalEmployees || 0}，已读 ${job?.pages || 0} 页、${job?.records || 0} 条关系记录${completed ? '；当前显示上次完整数据' : ''}`} />}
-    {job?.status === 'failed' && <Alert type="error" showIcon message={job.error} action={<Button onClick={() => void onSync(entityId)}>重试同步</Button>} />}
+    {can('syncCustomers') && job?.status === 'failed' && <Alert type="error" showIcon message={job.error} action={<Button onClick={() => void onSync(entityId)}>重试同步</Button>} />}
     {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => setVersion(v => v + 1)}>重新读取</Button>} />}
     {namesError && <Alert type="warning" showIcon message={namesError} action={<Button onClick={() => setNamesVersion(v => v + 1)}>重试读取名称</Button>} />}
     {tagWarning && <Alert type="warning" showIcon message={tagWarning} />}
@@ -185,6 +189,7 @@ function CustomerList({ entityId, entityName, ownerId, job, onSync }: { entityId
 }
 
 export default function CustomerManage() {
+  const {admin,can}=useAccess();
   const ownerId = useAuthStore(state => state.user?.id);
   const preferenceKey = `customer-entity:${ownerId}`;
   const [entities, setEntities] = useState<WecomEntity[]>([]);
@@ -228,7 +233,7 @@ export default function CustomerManage() {
       <Select aria-label="主体" showSearch optionFilterProp="label" loading={loading} value={entityId}
         onChange={value => { setEntityId(value); writeCustomerPreference(preferenceKey, { entityId: value }); }} placeholder="选择主体" style={{ width: 300, maxWidth: '100%' }}
         options={entities.map(entity => ({ value: entity.id, label: entity.name }))} />
-      <Button icon={<ReloadOutlined />} loading={starting} disabled={loading || !entities.length} onClick={() => void sync()}>同步全部主体</Button>
+      {can('syncCustomers') && <Button icon={<ReloadOutlined />} loading={starting} disabled={loading || !entities.length} onClick={() => void sync()}>{admin?'同步全部主体':'同步授权主体'}</Button>}
     </div>
     {jobError && <Alert type="error" showIcon message={jobError} />}
     {!!jobs.length && <Collapse ghost style={{ margin: '16px 0' }} defaultActiveKey={[]} items={[{
@@ -246,7 +251,7 @@ export default function CustomerManage() {
       { title: '已读页数', dataIndex: 'pages' },
       { title: '关系记录', dataIndex: 'records' },
       { title: '结果', render: (_, row) => row.error || row.message || (row.updatedAt ? dayjs(row.updatedAt).format('MM-DD HH:mm:ss') : '-') },
-      { title: '操作', render: (_, row) => row.status === 'failed' ? <Button size="small" icon={<ReloadOutlined />} disabled={starting} onClick={() => void sync(row.entityId)}>重试</Button> : null },
+      { title: '操作', render: (_, row) => can('syncCustomers') && row.status === 'failed' ? <Button size="small" icon={<ReloadOutlined />} disabled={starting} onClick={() => void sync(row.entityId)}>重试</Button> : null },
     ]} /></div>,
     }]} />}
     {entityId && ownerId != null ? <CustomerList key={`${ownerId}:${entityId}`} entityId={entityId} entityName={entities.find(entity => entity.id === entityId)?.name || String(entityId)} ownerId={ownerId} job={jobs.find(job => job.entityId === entityId)} onSync={sync} /> : !loading && !error && <Empty description="暂无主体" />}

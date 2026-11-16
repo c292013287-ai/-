@@ -1,6 +1,8 @@
+import {useAccess} from '../lib/access';
+import {recordOperation} from '../api/auth';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Button, Card, DatePicker, Descriptions, Input, InputNumber, Modal, Select, Space, Table, Tag, message } from 'antd';
+import { Alert, Button, Card, DatePicker, Descriptions, Grid, Input, InputNumber, Modal, Select, Space, Table, Tag, message } from 'antd';
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
@@ -97,7 +99,10 @@ function copyTextFallback(value: string) {
 
 export default function UserMigration() {
   const navigate = useNavigate();
-  const [records, setRecords] = useState<MigrationRecord[]>(() => loadMigrationRecords());
+  const {admin}=useAccess();
+  const fixedStart = Grid.useBreakpoint().md ? 'left' as const : undefined;
+  const accessRef=useRef('');
+  const [records, setRecords] = useState<MigrationRecord[]>(() => admin ? loadMigrationRecords() : []);
   const [detailRecordId, setDetailRecordId] = useState<number | null>(null);
   const [detailEdits, setDetailDraft] = useState<Partial<DetailDraft>>({});
   const [filters, setFilters] = useState({
@@ -170,7 +175,7 @@ export default function UserMigration() {
   const persist = (nextRecords: MigrationRecord[]) => {
     recordsRef.current = nextRecords;
     setRecords(nextRecords);
-    try { saveMigrationRecords(nextRecords); }
+    try { if(admin) saveMigrationRecords(nextRecords); }
     catch { setSyncError('数据已更新，但浏览器缓存写入失败；刷新后将从服务器重新读取'); }
   };
 
@@ -182,8 +187,8 @@ export default function UserMigration() {
       requestRef.current.abort();
     }
 
-    const config = loadFeishuFormConfig();
-    if (!config.appToken || !config.tableId) {
+    const config = admin ? loadFeishuFormConfig() : {appToken:"",tableId:"",viewId:""};
+    if (admin && (!config.appToken || !config.tableId)) {
       setSyncError('尚未配置飞书源表，请在信息采集页检查采集表链接');
       if (manual) {
         message.warning('请先在信息采集页配置飞书 App Token 和 Table ID');
@@ -206,25 +211,27 @@ export default function UserMigration() {
 
     try {
       const snapshot = await getMigrationSnapshot({
-        appToken: config.appToken,
-        tableId: config.tableId,
-        viewId: config.viewId || undefined,
+        ...(admin ? {appToken:config.appToken,tableId:config.tableId,viewId:config.viewId||undefined} : {}),
         revision: revisionRef.current || undefined,
       }, manual, controller.signal);
-      const currentConfig = loadFeishuFormConfig();
+      const currentConfig = admin ? loadFeishuFormConfig() : config;
       if (controller.signal.aborted || mutationVersion !== mutationRef.current.version
         || sourceKey !== JSON.stringify([currentConfig.appToken, currentConfig.tableId, currentConfig.viewId || ''])) return;
+      if (!admin) {
+        accessRef.current=snapshot.accessKey || '';
+        if (!snapshot.ready) {recordsRef.current=[];setRecords([]);setLiveMigrationStats(null);revisionRef.current='';}
+      }
       setSourceRefreshing(snapshot.refreshing);
       setSyncError(snapshot.error ? `${snapshot.error}。当前保留上次成功数据，服务器将自动重试。` : '');
       if (snapshot.ready) {
         if (snapshot.records) {
           const incomingRecords = snapshot.records.map(migrationRecordFromFeishu);
-          const nextRecords = mergeMigrationRecords(recordsRef.current, incomingRecords);
+          const nextRecords = admin ? mergeMigrationRecords(recordsRef.current, incomingRecords) : incomingRecords;
           recordsRef.current = nextRecords;
           setRecords(nextRecords);
           setLiveMigrationStats(getMigrationStats(incomingRecords));
           revisionRef.current = snapshot.revision;
-          try { saveMigrationRecords(nextRecords); }
+          try { if(admin) saveMigrationRecords(nextRecords); }
           catch { setSyncError('最新源表已读取，但浏览器缓存写入失败；刷新后将从服务器重新读取'); }
         }
         setLastSyncedAt(dayjs(snapshot.updatedAt).format('YYYY-MM-DD HH:mm:ss'));
@@ -233,7 +240,8 @@ export default function UserMigration() {
     } catch (error) {
       if (controller.signal.aborted) return;
       const errorMessage = getMigrationSyncError(error);
-      setSyncError(`${errorMessage}。当前保留上次数据，尚未完成本次源表同步。`);
+      if (!admin) {accessRef.current='';revisionRef.current='';recordsRef.current=[];setRecords([]);setLiveMigrationStats(null);setSyncError(errorMessage);}
+      else setSyncError(`${errorMessage}。当前保留上次数据，尚未完成本次源表同步。`);
       if (manual) message.error(errorMessage);
     } finally {
       if (requestRef.current === controller) {
@@ -241,7 +249,7 @@ export default function UserMigration() {
         setSyncing(false);
       }
     }
-  }, [navigate]);
+  }, [navigate,admin]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -298,7 +306,8 @@ export default function UserMigration() {
       okText: '确认删除',
       okType: 'danger',
       cancelText: '取消',
-      onOk: () => {
+      onOk: async () => {
+        await recordOperation('removeMigration',record.id);
         markMigrationRecordDeleted(record);
         persist(records.filter((item) => item.id !== record.id));
         setDetailRecordId(null);
@@ -335,8 +344,8 @@ export default function UserMigration() {
       return;
     }
 
-    const config = loadFeishuFormConfig();
-    if (!config.appToken || !config.tableId) {
+    const config = admin ? loadFeishuFormConfig() : {appToken:"",tableId:"",viewId:""};
+    if (admin && (!config.appToken || !config.tableId)) {
       message.warning('请先在信息采集页配置飞书 App Token 和 Table ID');
       return;
     }
@@ -353,11 +362,12 @@ export default function UserMigration() {
 
       await updateFeishuMigrationRecord(
         record.sourceRecordId,
-        { appToken: config.appToken, tableId: config.tableId },
+        admin ? { appToken: config.appToken, tableId: config.tableId } : {accessKey:accessRef.current},
         {
           转量数量: transferCountValue || 0,
           处理人: handler,
           处理时间: processedAtTimestamp,
+          ...(!admin ? {操作状态:PUSH_STATUS_VALUE} : {}),
         },
       );
 
@@ -377,9 +387,9 @@ export default function UserMigration() {
       ));
       persist(localSyncedRecords);
 
-      await updateFeishuMigrationRecord(
+      if(admin) await updateFeishuMigrationRecord(
         record.sourceRecordId,
-        { appToken: config.appToken, tableId: config.tableId },
+        admin ? { appToken: config.appToken, tableId: config.tableId } : {accessKey:accessRef.current},
         { 操作状态: PUSH_STATUS_VALUE },
       );
 
@@ -432,8 +442,8 @@ export default function UserMigration() {
       return;
     }
 
-    const config = loadFeishuFormConfig();
-    if (!config.appToken || !config.tableId) {
+    const config = admin ? loadFeishuFormConfig() : {appToken:"",tableId:"",viewId:""};
+    if (admin && (!config.appToken || !config.tableId)) {
       message.warning('请先在信息采集页配置飞书 App Token 和 Table ID');
       return;
     }
@@ -444,7 +454,7 @@ export default function UserMigration() {
     try {
       await updateFeishuMigrationRecord(
         record.sourceRecordId,
-        { appToken: config.appToken, tableId: config.tableId },
+        admin ? { appToken: config.appToken, tableId: config.tableId } : {accessKey:accessRef.current},
         { 备注: nextRemark },
       );
       persist(recordsRef.current.map((item) => (
@@ -467,12 +477,13 @@ export default function UserMigration() {
     }
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (filteredRecords.length === 0) {
       message.info('当前筛选条件下暂无可导出的记录');
       return;
     }
 
+    try { await recordOperation('migration'); } catch { message.error('无法登记导出，请重试'); return; }
     const header = ['案例ID', '提交人', '上级', '所属SKU', '主体', '迁移账号', '迁移账号手机号', '承接账号', '承接账号手机号', '迁移类型', '迁移客户数量', '转量数量', '迁移用户完整标签', '迁移话术', '定性', 'leader是否同意', '处理人', '登记时间', '操作状态'];
     const rows = filteredRecords.map((record) => [
       getMigrationField(record, ['案例ID']),
@@ -510,7 +521,7 @@ export default function UserMigration() {
       title: '备注',
       key: 'remark',
       width: 100,
-      fixed: 'left' as const,
+      fixed: fixedStart,
       render: (_: unknown, record: MigrationRecord) => (
         editingRemarkId === record.id ? (
           <Input
@@ -521,7 +532,7 @@ export default function UserMigration() {
             placeholder="请输入备注"
             onChange={(event) => setRemarkDraft(event.target.value)}
             onBlur={() => void saveRemark(record)}
-            onPressEnter={() => void saveRemark(record)}
+            onPressEnter={event => event.currentTarget.blur()}
             onKeyDown={(event) => {
               if (event.key === 'Escape') cancelEditRemark();
             }}
@@ -542,12 +553,12 @@ export default function UserMigration() {
         )
       ),
     },
-    { title: '转量数量', key: 'transferCount', width: 100, fixed: 'left' as const, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['转量数量']) },
+    { title: '转量数量', key: 'transferCount', width: 100, fixed: fixedStart, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['转量数量']) },
     {
       title: '提交人',
       key: 'submitter',
       width: 100,
-      fixed: 'left' as const,
+      fixed: fixedStart,
       render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['提交人']),
     },
     { title: '上级', key: 'leader', width: 100, render: (_: unknown, record: MigrationRecord) => getMigrationField(record, ['上级']) },
@@ -600,7 +611,7 @@ export default function UserMigration() {
         extra={(
           <Space wrap>
             <Button icon={<SaveOutlined />} loading={syncing} onClick={handleSaveAndSync}>保存并同步</Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/migration/collect')}>采集信息</Button>
+            {admin && <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/migration/collect')}>采集信息</Button>}
           </Space>
         )}
       />
@@ -685,7 +696,7 @@ export default function UserMigration() {
           </div>
           <div className="migration-filter-actions">
             <Button icon={<ReloadOutlined />} onClick={handleResetFilters}>重置</Button>
-            <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>
+            {admin && <Button icon={<ExportOutlined />} onClick={handleExport}>导出</Button>}
           </div>
         </div>
       </Card>
@@ -723,13 +734,13 @@ export default function UserMigration() {
             <div className="migration-detail-footer">
               <div className="migration-detail-tip">如果无法转量，请在列表第一列编辑备注</div>
               <Space>
-                <Button
+                {admin && <Button
                   danger
                   icon={<DeleteOutlined />}
                   onClick={() => handleDeleteRecord(detailRecord)}
                 >
                   删除
-                </Button>
+                </Button>}
                 <Button
                   type="primary"
                   disabled={hasLocalOperationStatus(detailRecord) || !canPushDraft(detailDraft)}

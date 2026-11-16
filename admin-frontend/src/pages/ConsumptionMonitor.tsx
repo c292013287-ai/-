@@ -1,3 +1,4 @@
+import {useAccess} from '../lib/access';
 import { useEffect, useState } from 'react';
 import { Table, Select, DatePicker, Space, Button, message, Modal, Form, Input, Popconfirm, Card } from 'antd';
 import { CheckOutlined, CloseOutlined, LockOutlined,
@@ -11,6 +12,7 @@ import PageHeader from '../components/PageHeader';
 import StatCard from '../components/StatCard';
 
 export default function ConsumptionMonitor() {
+  const {admin}=useAccess();
   const [records, setRecords] = useState<ConsumptionRecord[]>([]);
   const [entities, setEntities] = useState<WecomEntity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,8 +130,8 @@ export default function ConsumptionMonitor() {
           options={entityOptions} />
         <DatePicker.RangePicker value={dateRange} onChange={d => { if (d?.[0] && d[1]) { setDateRange([d[0], d[1]]); setPagination(p => ({ ...p, current: 1 })); } }} />
         <div className="filter-bar-spacer" />
-        <Button icon={<SyncOutlined spin={syncing} />} onClick={handleSync} loading={syncing}>同步</Button>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>新增记录</Button>
+        {admin && <Button icon={<SyncOutlined spin={syncing} />} onClick={handleSync} loading={syncing}>同步</Button>}
+        {admin && <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>新增记录</Button>}
       </div>
 
       {chartData.length > 0 && (
@@ -146,7 +148,7 @@ export default function ConsumptionMonitor() {
         </Card>
       )}
 
-      <Table dataSource={records} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 980 }}
+      <Table dataSource={records} columns={columns.filter(c=>admin||c.key!=='action')} rowKey="id" loading={loading} size="middle" scroll={{ x: 980 }}
         pagination={{ ...pagination, showSizeChanger: true, showTotal: t => `共 ${t} 条`, onChange: (page, pageSize) => setPagination({ ...pagination, current: page, pageSize }) }} />
 
       <Modal title="新增消耗记录" open={createOpen} onOk={handleCreate} onCancel={() => setCreateOpen(false)} destroyOnClose width={420}>

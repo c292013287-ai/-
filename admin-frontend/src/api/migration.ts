@@ -7,6 +7,7 @@ export interface FeishuRecord {
 }
 
 export interface MigrationSnapshot {
+  accessKey?: string;
   ready: boolean;
   records?: FeishuRecord[];
   revision: string;
@@ -16,7 +17,7 @@ export interface MigrationSnapshot {
 }
 
 export async function getMigrationSnapshot(
-  params: { appToken: string; tableId: string; viewId?: string; revision?: string },
+  params: { appToken?: string; tableId?: string; viewId?: string; revision?: string },
   force: boolean,
   signal: AbortSignal,
 ) {
@@ -53,7 +54,7 @@ export function getMigrationSyncError(error: unknown) {
 
 export async function updateFeishuMigrationRecord(
   recordId: string,
-  params: { appToken: string; tableId: string },
+  params: { appToken?: string; tableId?: string; accessKey?:string },
   fields: Record<string, string | number>,
 ) {
   const { data } = await client.patch<{ success: boolean }>(`/migration/feishu/records/${recordId}`, { fields }, { params });

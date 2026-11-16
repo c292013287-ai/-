@@ -1,3 +1,4 @@
+import {useAccess} from '../lib/access';
 import { useEffect, useState } from 'react';
 import { Button, Card, Form, Input, Spin, Typography, message } from 'antd';
 import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons';
@@ -9,6 +10,7 @@ import {
 const { Title, Text } = Typography;
 
 export default function EntityAccessGuard({ children, title = '主体管理' }: { children: React.ReactNode; title?: string }) {
+  const {admin}=useAccess();
   const [checking, setChecking] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -52,7 +54,7 @@ export default function EntityAccessGuard({ children, title = '主体管理' }: 
         <div className="entity-access-heading">
           <span className="entity-access-icon"><SafetyCertificateOutlined /></span>
           <Title level={3}>{title}访问验证</Title>
-          <Text type="secondary">请输入主体管理专用账号和密码后继续</Text>
+          <Text type="secondary">{admin?'请输入管理专用账号和密码后继续':'请再次验证本人的登录账号和密码'}</Text>
         </div>
         <Form layout="vertical" onFinish={handleUnlock} requiredMark={false}>
           <Form.Item name="username" label="访问账号" rules={[{ required: true, message: '请输入访问账号' }]}>

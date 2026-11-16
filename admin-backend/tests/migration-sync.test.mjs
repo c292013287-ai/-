@@ -24,6 +24,8 @@ axios.defaults.adapter = async config => {
   else data = await recordsAdapter(config);
   return { data, status: 200, statusText: 'OK', headers: {}, config };
 };
+const testPrisma = createRequire(import.meta.url)('../src/lib/prisma.ts').default;
+testPrisma.user.findUnique = async()=>({role:'admin',status:'active',sessionVersion:0,grants:[]});
 const { default: migration } = await import('../src/routes/migration.ts');
 let server, base;
 const authorization = 'Bearer ' + jwt.sign({ userId: 1, role: 'admin' }, process.env.JWT_SECRET);
@@ -143,4 +145,58 @@ test('snapshot endpoints return immediately, require auth, and send records only
   }
   assert.match(failed.error, /超时/);
   assert.equal(failed.updatedAt, ready.updatedAt);
+});
+
+test('operators can process only mapped and granted records from the approved source', async () => {
+  const {saveAccess} = createRequire(import.meta.url)('../src/lib/migrationAccess.ts');
+  const previousUser = testPrisma.user.findUnique;
+  const previousPolicy = testPrisma.rolePolicy.findUnique;
+  const endpoint = base.replace('/records', '/snapshot');
+  const headers = {authorization:'Bearer '+jwt.sign({userId:2,role:'operator'},process.env.JWT_SECRET),'content-type':'application/json'};
+  let entityIds = [4], override = null;
+  testPrisma.user.findUnique = async () => ({role:'operator',status:'active',sessionVersion:0,grants:entityIds.map(entityId=>({entityId}))});
+  testPrisma.rolePolicy.findUnique = async () => override;
+  const records = ['A','B','Unknown'].map((label,i)=>record('r'+i,{'选择要迁移用户的主体':label,'迁移账号绑定手机号':'13800000000',secret:'hidden'}));
+  const writes = [];
+  recordsAdapter = config => {
+    if(config.method === 'put') {
+      const {fields} = JSON.parse(config.data);
+      Object.assign(records[0].fields, fields);
+      writes.push(fields);
+      return {code:0};
+    }
+    return page(records);
+  };
+  try {
+    assert.equal((await fetch(endpoint,{headers})).status,409);
+    await saveAccess({source:{appToken:'wiki-test',tableId:'operator-test',viewId:'approved'},bindings:[{label:'A',entityId:4},{label:'B',entityId:5}]});
+    let result;
+    for(let i=0;i<100;i++) {
+      result=await (await fetch(endpoint,{headers})).json();
+      if(result.ready) break;
+      await new Promise(resolve=>setTimeout(resolve,5));
+    }
+    assert.deepEqual(result.records.map(r=>r.recordId),['r0']);
+    assert.equal(result.records[0].fields.迁移账号绑定手机号,'已脱敏');
+    assert.equal(result.records[0].fields.secret,undefined);
+    assert.equal((await fetch(endpoint+'?tableId=other',{headers})).status,403);
+    assert.equal((await fetch(base,{headers})).status,403);
+    const patch = (id,fields,key=result.accessKey) => fetch(base+'/'+id+'?accessKey='+key,{method:'PATCH',headers,body:JSON.stringify({fields})});
+    assert.equal((await patch('r0',{备注:'x'},'expired')).status,403);
+    assert.equal((await patch('r1',{备注:'x'})).status,403);
+    assert.equal((await patch('r2',{备注:'x'})).status,403);
+    assert.equal((await patch('r0',{提交人:'test'})).status,400);
+    assert.equal((await patch('r0',{备注:'checked'})).status,200);
+    const push={转量数量:0,处理人:'张磊',处理时间:Date.now(),操作状态:'推送'};
+    assert.equal((await patch('r0',push)).status,200);
+    assert.equal((await patch('r0',push)).status,400);
+    assert.deepEqual(writes,[{备注:'checked'},push]);
+    entityIds=[];
+    assert.equal((await patch('r0',{备注:'x'})).status,403);
+    override={permissions:['entities']};
+    assert.equal((await fetch(endpoint,{headers})).status,403);
+  } finally {
+    testPrisma.user.findUnique=previousUser;
+    testPrisma.rolePolicy.findUnique=previousPolicy;
+  }
 });

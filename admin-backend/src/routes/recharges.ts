@@ -1,3 +1,4 @@
+import { scopedIds } from '../middleware/scope';
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { parseDate, parseDateTime } from '../lib/date';
@@ -35,8 +36,7 @@ function validateFeeAmount(method: string | undefined, feeAmount: unknown) {
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const { entityId, rechargeType, startDate, endDate, page = '1', pageSize = '20' } = req.query;
-    const where: any = {};
-    if (entityId) where.entityId = Number(entityId);
+    const where: any = {entityId:scopedIds(req,entityId)};
     if (rechargeType) where.rechargeType = String(rechargeType);
     if (startDate || endDate) {
       where.rechargeDate = {};
@@ -58,7 +58,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     ]);
     const now = new Date();
     const monthAgg = await prisma.rechargeRecord.aggregate({
-      where: {
+      where: { entityId: scopedIds(req),
         rechargeDate: {
           gte: new Date(now.getFullYear(), now.getMonth(), 1),
           lte: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999),
@@ -103,7 +103,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const { amount, rechargeType, rechargeDate, method, orderNumber, feeAmount, remark } = req.body;
-    const current = await prisma.rechargeRecord.findUnique({ where: { id: Number(req.params.id) } });
+    const current = await prisma.rechargeRecord.findFirst({ where: { id: Number(req.params.id), entityId:scopedIds(req) } });
     if (!current) return res.status(404).json({ error: '充值记录不存在' });
     const nextRechargeType = rechargeType ?? current.rechargeType;
     const nextMethod = method ?? current.method;

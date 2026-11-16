@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import {canPage} from '../lib/access';
+import { Result } from 'antd';
+import { SafetyOutlined } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Button, Dropdown, Breadcrumb } from 'antd';
 import {
@@ -34,7 +37,8 @@ export default function AppLayout() {
     { key: '/recharges', icon: <DollarOutlined />, label: '充值记录' },
     { key: '/migration', icon: <UserSwitchOutlined />, label: '用户迁移' },
     { key: '/handover', icon: <SolutionOutlined />, label: '离职交接' },
-  ];
+    { key:'/permissions',icon:<SafetyOutlined />,label:'权限管理' },
+  ].filter(row=>canPage(user,row.key));
   const breadcrumbMap: Record<string, { label: string; icon: React.ReactNode }> = {};
   routes.forEach(r => { breadcrumbMap[r.key] = { label: r.label, icon: r.icon }; });
   breadcrumbMap['/migration/collect'] = { label: '信息采集', icon: <UserSwitchOutlined /> };
@@ -86,7 +90,7 @@ export default function AppLayout() {
       </header>
       <main className="app-main" style={{ marginLeft: sw, width: `calc(100% - ${sw}px)` }}>
         <div className="app-content-card">
-          <Outlet />
+          {canPage(user,location.pathname)?<Outlet />:<Result status="403" title="无访问权限" extra={<Button onClick={()=>navigate('/')}>返回首页</Button>} />}
         </div>
       </main>
     </div>

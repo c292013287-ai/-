@@ -1,3 +1,4 @@
+import {accountCacheKey} from '../lib/accountCache';
 import { useMemo, useState } from 'react';
 import { Alert, Button, Card, Form, Input, Space, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -71,7 +72,7 @@ function parseFeishuConfigFromLink(link: string) {
 
 function loadConfig() {
   try {
-    const raw = localStorage.getItem(HANDOVER_CONFIG_KEY);
+    const raw = localStorage.getItem(accountCacheKey(HANDOVER_CONFIG_KEY));
     return raw ? { ...defaultConfig, ...JSON.parse(raw) as Partial<LinkFormValues> } : defaultConfig;
   } catch {
     return defaultConfig;
@@ -79,12 +80,12 @@ function loadConfig() {
 }
 
 function saveConfig(config: LinkFormValues) {
-  localStorage.setItem(HANDOVER_CONFIG_KEY, JSON.stringify(config));
+  localStorage.setItem(accountCacheKey(HANDOVER_CONFIG_KEY), JSON.stringify(config));
 }
 
 function loadRecords() {
   try {
-    const raw = localStorage.getItem(HANDOVER_RECORDS_KEY);
+    const raw = localStorage.getItem(accountCacheKey(HANDOVER_RECORDS_KEY));
     return raw ? JSON.parse(raw) as FeishuRecord[] : [];
   } catch {
     return [];
@@ -92,11 +93,11 @@ function loadRecords() {
 }
 
 function saveRecords(records: FeishuRecord[]) {
-  localStorage.setItem(HANDOVER_RECORDS_KEY, JSON.stringify(records));
+  localStorage.setItem(accountCacheKey(HANDOVER_RECORDS_KEY), JSON.stringify(records));
 }
 
 function saveLastSyncedAt(value: string) {
-  localStorage.setItem(HANDOVER_SYNC_TIME_KEY, value);
+  localStorage.setItem(accountCacheKey(HANDOVER_SYNC_TIME_KEY), value);
 }
 
 function formatFeishuTime(value?: number) {

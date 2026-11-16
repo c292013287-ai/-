@@ -1,3 +1,4 @@
+import {accountCacheKey} from '../lib/accountCache';
 import { useMemo, useState } from 'react';
 import { Alert, Button, Card, Descriptions, Empty, Modal, Space, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -70,7 +71,7 @@ function formatFeishuTime(value?: number) {
 
 function loadHandoverRecords() {
   try {
-    const raw = localStorage.getItem(HANDOVER_RECORDS_KEY);
+    const raw = localStorage.getItem(accountCacheKey(HANDOVER_RECORDS_KEY));
     return raw ? JSON.parse(raw) as FeishuRecord[] : [];
   } catch {
     return [];
@@ -78,15 +79,15 @@ function loadHandoverRecords() {
 }
 
 function saveHandoverRecords(records: FeishuRecord[]) {
-  localStorage.setItem(HANDOVER_RECORDS_KEY, JSON.stringify(records));
+  localStorage.setItem(accountCacheKey(HANDOVER_RECORDS_KEY), JSON.stringify(records));
 }
 
 function loadLastSyncedAt() {
-  return localStorage.getItem(HANDOVER_SYNC_TIME_KEY) || '';
+  return localStorage.getItem(accountCacheKey(HANDOVER_SYNC_TIME_KEY)) || '';
 }
 
 function saveLastSyncedAt(value: string) {
-  localStorage.setItem(HANDOVER_SYNC_TIME_KEY, value);
+  localStorage.setItem(accountCacheKey(HANDOVER_SYNC_TIME_KEY), value);
 }
 
 export default function Handover() {

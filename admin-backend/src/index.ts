@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import permissionRoutes from './routes/permissions';
+import { pruneAudit } from './lib/securityAudit';
 import authRoutes from './routes/auth';
 import entityRoutes from './routes/entities';
 import consumptionRoutes from './routes/consumption';
@@ -38,6 +40,7 @@ app.use((req, _res, next) => {
 });
 
 // 路由
+app.use('/api/permissions', permissionRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/wecom/customer-events', customerCallbacks);
 app.use('/api/entities', entityRoutes);
@@ -59,6 +62,8 @@ app.listen(PORT, () => {
   console.log(`Health check: http://localhost:${PORT}/api/health`);
 
   // 启动定时任务
+  const prune = () => void pruneAudit().catch(() => console.error('[Audit] 清理失败'));
+  prune(); setInterval(prune, 86400000).unref();
   startScheduler();
   void startMigrationSnapshots().catch(() => console.error('[MigrationSync] Initialization failed'));
   void customerLive.start().then(() => customerLive.enabled ? customerSyncJobs.resumeInterrupted() : undefined)

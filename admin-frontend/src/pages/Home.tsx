@@ -1,3 +1,4 @@
+import {useAccess} from '../lib/access';
 import { useEffect, useState } from 'react';
 import { Card, Spin, Typography, Tag, Button, Modal, Form, Input, Select, Popconfirm, message, Empty } from 'antd';
 import { SoundOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -9,6 +10,7 @@ const { TextArea } = Input;
 function getGreeting() { const h = new Date().getHours(); return h < 12 ? '早上好' : h < 18 ? '下午好' : '晚上好'; }
 
 export default function Home() {
+  const {admin}=useAccess();
   const [notices, setNotices] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -48,7 +50,7 @@ export default function Home() {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={5} style={{ marginBottom: 0, fontWeight: 600 }}><SoundOutlined style={{ marginRight: 8 }} />系统公告</Title>
-        <Button type="primary" size="small" icon={<PlusOutlined />} onClick={openCreate}>发布公告</Button>
+        {admin && <Button type="primary" size="small" icon={<PlusOutlined />} onClick={openCreate}>发布公告</Button>}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {notices.length === 0 ? <Card bodyStyle={{ padding: '40px 24px', textAlign: 'center' }}><Empty description="暂无公告" /></Card>
@@ -61,10 +63,10 @@ export default function Home() {
                 <Text type="secondary" style={{ fontSize: 13, lineHeight: 1.8, display: 'block' }}>{n.content}</Text>
                 <Text type="secondary" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>{n.date}</Text>
               </div>
-              <div style={{ display: 'flex', gap: 4 }}>
+              {admin && <div style={{ display: 'flex', gap: 4 }}>
                 <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openEdit(n)} />
                 <Popconfirm title="确定删除？" onConfirm={() => handleDelete(n.id)}><Button type="text" size="small" danger icon={<DeleteOutlined />} /></Popconfirm>
-              </div>
+              </div>}
             </div>
           </Card>
         ))}

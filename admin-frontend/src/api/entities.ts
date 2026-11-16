@@ -223,6 +223,6 @@ export interface SyncResult {
 }
 
 export async function syncEntity(id: number): Promise<SyncResult> {
-  const { data } = await client.post(`/entities/${id}/sync`);
+  const { data } = await client.post(`/entities/${id}/sync`,undefined,{headers:entityAccessHeaders()});
   return data;
 }

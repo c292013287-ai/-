@@ -1,3 +1,5 @@
+import {canPage} from '../lib/access';
+import {useAuthStore} from '../store/authStore';
 import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Alert, Button, Spin, Tabs } from 'antd';
@@ -23,6 +25,7 @@ const shortcuts = [
 ];
 
 export default function Workbench() {
+  const user=useAuthStore(s=>s.user);
   const [notes, setNotes] = useState<WorkbenchNote[]>([]);
   const [todos, setTodos] = useState<WorkbenchTodo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +55,7 @@ export default function Workbench() {
         { key: 'shortcuts', label: '常用功能', icon: <AppstoreOutlined />, children: <nav aria-labelledby="workbench-shortcuts-title">
         <h3 id="workbench-shortcuts-title" className="workbench-section-title">常用功能</h3>
         <ul className="workbench-shortcuts">
-          {shortcuts.map(shortcut => (
+          {shortcuts.filter(s=>canPage(user,s.path)).map(shortcut => (
             <li key={shortcut.path}>
               <Link className="workbench-shortcut" to={shortcut.path}>
                 <span className="workbench-shortcut-icon" aria-hidden="true">{shortcut.icon}</span>

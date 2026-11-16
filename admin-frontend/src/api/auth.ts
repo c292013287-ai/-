@@ -1,5 +1,7 @@
 import client from './client';
 
+export async function recordOperation(operation:string,id?:number){await client.post('/auth/events',{operation,id});}
+
 export interface LoginParams {
   username: string;
   password: string;
@@ -10,6 +12,7 @@ export interface UserInfo {
   username: string;
   name: string;
   role: string;
+  permissions?: string[];
 }
 
 export interface LoginResult {

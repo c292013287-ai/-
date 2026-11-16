@@ -1,3 +1,5 @@
+import {recordOperation} from '../api/auth';
+import {useAccess} from '../lib/access';
 import { useEffect, useState } from 'react';
 import { Table, Select, DatePicker, Space, Button, Modal, Form, Input, InputNumber, Popconfirm, message, Tag, Upload, Alert } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, DollarOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
@@ -23,6 +25,7 @@ const RECHARGE_TYPE_OPTIONS = [
 const rechargeTypeColors: Record<string, string> = { 获客助手: 'blue', 外部联系人规模: 'orange' };
 
 export default function RechargePage() {
+  const {admin,can}=useAccess();
   const [data, setData] = useState<RechargeRecord[]>([]);
   const [entities, setEntities] = useState<WecomEntity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,6 +84,7 @@ export default function RechargePage() {
       for (const r of res.data) sheetData.push([r.entity?.corpid || '', r.entity?.name || '', r.entity?.sku || '', r.rechargeType || '获客助手', r.rechargeType === '外部联系人规模' ? '' : String(r.amount), dayjs(r.rechargeDate).format('YYYY-MM-DD HH:mm'), r.method, r.orderNumber || '', r.feeAmount != null ? String(r.feeAmount) : '', r.remark || '']);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheetData), '充值记录');
+      await recordOperation('recharges');
       XLSX.writeFile(wb, '充值记录.xlsx');
       message.success(`已导出 ${res.data.length} 条记录`);
     } catch { message.error('导出失败'); }
@@ -159,7 +163,7 @@ export default function RechargePage() {
     { title: '支付方式', dataIndex: 'method', width: 90, render: (v: string) => <Tag color={methodColors[v] || 'default'}>{v}</Tag> },
     { title: '订单编号', dataIndex: 'orderNumber', width: 140, ellipsis: true, render: (v: string | null) => v || '-' },
     { title: '费用金额', dataIndex: 'feeAmount', width: 100, render: (v: number | null) => v != null ? <span style={{ color: v < 0 ? '#ff4d4f' : '#fa8c16' }}>¥{v.toLocaleString()}</span> : '-' },
-    { title: '操作', key: 'action', width: 140, render: (_: any, r: RechargeRecord) => (<Space><Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button><Popconfirm title="确认删除？" onConfirm={() => handleDelete(r.id)}><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm></Space>) },
+    { title: '操作', key: 'action', width: 140, render: (_: any, r: RechargeRecord) => (<Space>{can("editRecharge") && <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>}{admin && <Popconfirm title="确认删除？" onConfirm={() => handleDelete(r.id)}><Button size="small" danger icon={<DeleteOutlined />} /></Popconfirm>}</Space>) },
   ];
 
   return (
@@ -174,10 +178,10 @@ export default function RechargePage() {
         <Select placeholder="全部充值类型" allowClear style={{ width: 180 }} value={rechargeTypeFilter} onChange={v => { setRechargeTypeFilter(v); setPagination(p => ({ ...p, current: 1 })); }} options={RECHARGE_TYPE_OPTIONS} />
         <DatePicker.RangePicker value={dateRange} allowClear onChange={d => { setDateRange(d as any); setPagination(p => ({ ...p, current: 1 })); }} />
         <div className="filter-bar-spacer" />
-        <Button icon={<DownloadOutlined />} onClick={handleDownload}>下载</Button>
-        <Upload accept=".xlsx,.xls,.csv" showUploadList={false} beforeUpload={handleUpload}><Button icon={<UploadOutlined />}>上传</Button></Upload>
+        {admin && <Button icon={<DownloadOutlined />} onClick={handleDownload}>下载</Button>}
+        {can("editRecharge") && <Upload accept=".xlsx,.xls,.csv" showUploadList={false} beforeUpload={handleUpload}><Button icon={<UploadOutlined />}>上传</Button></Upload>}
         <Button type="link" size="small" onClick={handleDownloadTemplate} style={{ padding: 0 }}>下载模板</Button>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增充值</Button>
+        {can("editRecharge") && <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增充值</Button>}
       </div>
       <Table dataSource={data} columns={columns} rowKey="id" loading={loading} size="middle" scroll={{ x: 1300 }} pagination={{ ...pagination, showSizeChanger: true, showTotal: (t: number) => `共 ${t} 条`, onChange: (page, pageSize) => setPagination({ ...pagination, current: page, pageSize }) }} />
       <Modal title={editingId ? '编辑充值' : '新增充值'} open={modalOpen} onOk={handleSubmit} onCancel={() => setModalOpen(false)} confirmLoading={submitting} destroyOnClose width={500}>

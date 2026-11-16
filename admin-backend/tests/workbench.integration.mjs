@@ -31,7 +31,7 @@ test('workbench database persistence, ownership, access control and conflicts', 
     return { status: response.status, data: await response.json() };
   }
   try {
-    for (let i = 0; i < 2; i++) users.push(await prisma.user.create({ data: { username: `workbench-test-${randomUUID()}`, password: 'not-a-login-hash', name: '工作台自动测试' } }));
+    for (let i = 0; i < 2; i++) users.push(await prisma.user.create({ data: { username: `workbench-test-${randomUUID()}`, password: 'not-a-login-hash', role:'admin', name: '工作台自动测试' } }));
     for (const resource of ['notes', 'todos']) {
       assert.equal((await request(`/${resource}`, { override: { Authorization: '' } })).status, 401);
       for (const token of ['', jwt.sign({ userId: users[0].id, scope: 'entity-management' }, secret, { expiresIn: -1 }),

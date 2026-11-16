@@ -1,3 +1,4 @@
+import { scopedIds } from '../middleware/scope';
 import { Router, Response } from 'express';
 import prisma from '../lib/prisma';
 import { startOfDay, daysAgo, fmtDate } from '../lib/date';
@@ -8,15 +9,15 @@ const router = Router();
 router.use(authMiddleware);
 
 // GET /api/dashboard/stats - 仪表盘/AI页面统计
-router.get('/stats', async (_req: AuthRequest, res: Response) => {
+router.get('/stats', async (req: AuthRequest, res: Response) => {
   try {
-    const entities = await prisma.wecomEntity.findMany();
+    const entities = await prisma.wecomEntity.findMany({where:{id:scopedIds(req)}});
     const today = startOfDay();
     const threeDaysAgo = daysAgo(3);
 
     // 活跃主体：近3天内有消耗记录的主体
     const recentConsumers = await prisma.consumptionRecord.findMany({
-      where: { date: { gte: threeDaysAgo, lt: today }, consumption: { gt: 0 } },
+      where: { entityId:scopedIds(req), date: { gte: threeDaysAgo, lt: today }, consumption: { gt: 0 } },
       distinct: ['entityId'],
       select: { entityId: true },
     });
@@ -28,7 +29,7 @@ router.get('/stats', async (_req: AuthRequest, res: Response) => {
 
     // 今日消耗（含充值补偿）
     const todayRecords = await prisma.consumptionRecord.findMany({
-      where: { date: { gte: today, lt: new Date(today.getTime() + 86399000) } },
+      where: { entityId:scopedIds(req), date: { gte: today, lt: new Date(today.getTime() + 86399000) } },
     });
     const todayEntityIds = [...new Set(todayRecords.map(r => r.entityId))];
     const todayRechargeMap = await buildRechargeMap(todayEntityIds, today, today);
@@ -39,7 +40,7 @@ router.get('/stats', async (_req: AuthRequest, res: Response) => {
 
     // 当月累计消耗（含充值补偿）
     const monthRecords = await prisma.consumptionRecord.findMany({
-      where: { date: { gte: monthStart } },
+      where: { entityId:scopedIds(req), date: { gte: monthStart } },
     });
     const monthEntityIds = [...new Set(monthRecords.map(r => r.entityId))];
     const monthRechargeMap = await buildRechargeMap(monthEntityIds, monthStart);
@@ -51,7 +52,7 @@ router.get('/stats', async (_req: AuthRequest, res: Response) => {
     // 排名（当月）
     const ranking = await prisma.consumptionRecord.groupBy({
       by: ['entityId'],
-      where: { date: { gte: monthStart } },
+      where: { entityId:scopedIds(req), date: { gte: monthStart } },
       _sum: { consumption: true },
       orderBy: { _sum: { consumption: 'desc' } },
       take: 10,
@@ -88,8 +89,7 @@ router.get('/budget', async (req: AuthRequest, res: Response) => {
   try {
     const { entityId, yearMonth } = req.query;
 
-    const entityWhere: any = {};
-    if (entityId) entityWhere.id = Number(entityId);
+    const entityWhere = {id:scopedIds(req,entityId)};
 
     const entities = await prisma.wecomEntity.findMany({ where: entityWhere, orderBy: { createdAt: 'desc' } });
 
@@ -149,7 +149,7 @@ router.get('/budget', async (req: AuthRequest, res: Response) => {
 
     // 今日消耗总额（含充值补偿，与 consumption 路由保持一致）
     const todayRecords = await prisma.consumptionRecord.findMany({
-      where: { date: { gte: today, lt: new Date(today.getTime() + 86399000) } },
+      where: { entityId:scopedIds(req), date: { gte: today, lt: new Date(today.getTime() + 86399000) } },
     });
     const todayEntityIds = [...new Set(todayRecords.map(r => r.entityId))];
     const todayRechargeMap = await buildRechargeMap(todayEntityIds, today, today);

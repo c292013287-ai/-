@@ -5,6 +5,11 @@ import path from 'node:path';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { MigrationSnapshots, MigrationSource } from '../lib/migrationSnapshots';
 
+import prisma from '../lib/prisma';
+import { audit } from '../lib/securityAudit';
+import { entityManagementOnly } from '../middleware/entityManagement';
+import { accessKey, entityField, readAccess, saveAccess, scopedRows, validOperation, type Binding } from '../lib/migrationAccess';
+
 const router = Router();
 router.use(authMiddleware);
 
@@ -196,7 +201,54 @@ function sourceError(error: unknown) {
   return { timedOut, message: timedOut ? '飞书源表读取超时' : responseMessage || (error instanceof Error ? error.message : '获取飞书提交信息失败') };
 }
 
+router.get('/operator-source', entityManagementOnly, async (req,res)=>{
+  try {
+    const source=sourceFromQuery(req.query);
+    const snapshot=await snapshots.read(source);
+    if(!snapshot.ready || !snapshot.records) return res.status(409).json({error:'源表尚未就绪，请稍后重试'});
+    const entities=await prisma.wecomEntity.findMany({select:{id:true,name:true},orderBy:{id:'asc'}});
+    const saved=await readAccess();
+    const same= saved && JSON.stringify(saved.source)===JSON.stringify(source);
+    const labels=[...new Set([...snapshot.records.map(r=>r.fields[entityField]?.trim()).filter(Boolean),...(same?saved.bindings.map(b=>b.label):[])])].sort();
+    const bindings=labels.map(label=>{
+      const exact=entities.filter(e=>e.name.trim()===label);
+      return {label,entityId:same?saved.bindings.find(b=>b.label===label)?.entityId:(exact.length===1?exact[0].id:undefined)};
+    });
+    res.json({entities,bindings});
+  } catch {res.status(400).json({error:'无法读取主体对应关系，请检查源表配置'});}
+});
+router.put('/operator-source',entityManagementOnly,async(req:AuthRequest,res)=>{
+  try {
+    const source=sourceFromQuery(req.body?.source??{});
+    const bindings:Binding[]=req.body?.bindings;
+    const entities=await prisma.wecomEntity.findMany({select:{id:true}});
+    const ids=new Set(entities.map(e=>e.id));
+    if(!Array.isArray(bindings)||bindings.length>2000||bindings.some(b=>!b||typeof b.label!=='string'||!b.label.trim()||b.label!==b.label.trim()||b.label.length>200||!ids.has(b.entityId))
+      || new Set(bindings.map(b=>b.label)).size!==bindings.length) return res.status(400).json({error:'主体对应关系无效'});
+    const access={source,bindings:bindings.map(({label,entityId})=>({label,entityId}))};
+    await audit(req.userId!, '申请保存运营迁移范围', accessKey(access));
+    await saveAccess(access);
+    res.json({success:true});
+  } catch {res.status(400).json({error:'无法保存运营源表配置'});}
+});
+async function operatorSnapshot(req:AuthRequest,res:Response,force:boolean) {
+  if(Object.keys(req.query).some(k=>k!=='revision')) return res.status(403).json({error:'不能指定其他源表'});
+  const access=await readAccess();
+  if(!access) return res.status(409).json({error:'管理员尚未配置运营迁移源表'});
+  const snap=await snapshots.read(access.source,'',force);
+  const key=accessKey(access);
+  const rev=createHash('sha256').update(JSON.stringify([key,snap.revision,req.entityIds,req.permissions?.includes('phone')])).digest('hex');
+  const records=snap.records && rev!==req.query.revision ? scopedRows(snap.records,access.bindings,req.entityIds??[]).map(row=>{
+    const fields=Object.fromEntries(Object.entries(row.fields).filter(([k])=>operatorColumns.has(k)).map(([k,v])=>
+      [k,k.includes('手机号') && v && !req.permissions?.includes('phone')?'已脱敏':v]));
+    return {...row,fields};
+  }) : undefined;
+  res.json({...snap,records,revision:rev,accessKey:key,error:snap.error?'源表刷新失败，请稍后重试':''});
+}
+const operatorColumns=new Set('案例ID 提交人 上级 所属SKU 选择要迁移用户的主体 迁移账号姓名 迁移账号对内昵称 迁移账号绑定手机号 承接账号姓名 承接账号对内昵称 承接账号对你昵称 承接账号绑定手机号 迁移类型 迁移客户数量 迁移用户完整标签 迁移话术 迁移客户原因 定性 leader是否同意 转量数量 处理人 处理时间 登记时间 操作状态 备注'.split(' '));
+const operatorWrites=new Set<string>();
 router.get('/feishu/snapshot', async (req: AuthRequest, res: Response) => {
+  if(req.userRole!=='admin') {try {await operatorSnapshot(req,res,false);} catch {res.status(503).json({error:'无法读取迁移源表'});}return;}
   let source: MigrationSource;
   try { source = sourceFromQuery(req.query); }
   catch (error) { return res.status(400).json({ error: (error as Error).message }); }
@@ -208,6 +260,7 @@ router.get('/feishu/snapshot', async (req: AuthRequest, res: Response) => {
 });
 
 router.post('/feishu/sync', async (req: AuthRequest, res: Response) => {
+  if(req.userRole!=='admin') {try {await operatorSnapshot(req,res,true);} catch {res.status(503).json({error:'无法刷新迁移源表'});}return;}
   let source: MigrationSource;
   try { source = sourceFromQuery(req.query); }
   catch (error) { return res.status(400).json({ error: (error as Error).message }); }
@@ -237,12 +290,29 @@ router.get('/feishu/records', async (req: AuthRequest, res: Response) => {
 });
 
 router.patch('/feishu/records/:recordId', async (req: AuthRequest, res: Response) => {
+  let lock:string|undefined;
   try {
-    const appToken = String(req.query.appToken || '').trim();
-    const tableId = String(req.query.tableId || '').trim();
+    let appToken = String(req.query.appToken || '').trim();
+    let tableId = String(req.query.tableId || '').trim();
     const recordId = String(req.params.recordId || '').trim();
     const fields = req.body?.fields;
 
+    if(req.userRole!=='admin'){
+      const access=await readAccess();
+      if(!access || Object.keys(req.query).some(k=>k!=='accessKey') || req.query.accessKey!==accessKey(access))
+        return res.status(403).json({error:'迁移授权或源表已变化，请刷新列表'});
+      if(!fields || typeof fields!=='object' || Array.isArray(fields)) return res.status(400).json({error:'无效处理字段'});
+      const key=accessKey(access)+':'+recordId;
+      if(operatorWrites.has(key)) return res.status(409).json({error:'记录正在处理，请稍后刷新'});
+      operatorWrites.add(key);lock=key;
+      const rows=await sharedRecords(access.source);
+      const row=scopedRows(rows,access.bindings,req.entityIds??[]).find(r=>r.recordId===recordId);
+      if(!row) return res.status(403).json({error:'该记录不在授权范围'});
+      if(!validOperation(fields,row.fields)) return res.status(400).json({error:'只能修改备注或提交完整且尚未推送的处理信息'});
+      const current=await readAccess();
+      if(!current || accessKey(current)!==accessKey(access))return res.status(409).json({error:'源表配置已变更，请刷新'});
+      appToken=access.source.appToken;tableId=access.source.tableId;
+    }
     if (!appToken || !tableId || !recordId) {
       return res.status(400).json({ error: '缺少 appToken、tableId 或 recordId' });
     }
@@ -260,7 +330,7 @@ router.patch('/feishu/records/:recordId', async (req: AuthRequest, res: Response
     );
 
     if (data.code !== 0) {
-      return res.status(502).json({ error: data.msg || '更新飞书记录失败' });
+      return res.status(502).json({ error: req.userRole==='admin' && data.msg || '更新飞书记录失败' });
     }
 
     snapshots.invalidate(appToken, tableId);
@@ -271,8 +341,8 @@ router.patch('/feishu/records/:recordId', async (req: AuthRequest, res: Response
       ? String((responseData as { msg?: string }).msg || '')
       : '';
     const message = responseMessage || (error instanceof Error ? error.message : '更新飞书记录失败');
-    res.status(500).json({ error: message });
-  }
+    res.status(500).json({ error: req.userRole==='admin' ? message : '更新失败，请刷新后重试' });
+  } finally { if(lock) operatorWrites.delete(lock); }
 });
 
 export default router;
