@@ -3,6 +3,7 @@ import { Alert, Button, Card, Form, Input, Modal, Space, Table, Tag, Typography,
 import { ArrowLeftOutlined, CopyOutlined, ExportOutlined, LinkOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import {useAccess} from '../lib/access';
+import client from '../api/client';
 import dayjs from 'dayjs';
 import { getFeishuMigrationRecords, getMigrationSyncError } from '../api/migration';
 import MigrationBindings from './MigrationBindings';
@@ -187,6 +188,16 @@ export default function UserMigrationCollect() {
     };
     saveFeishuFormConfig(nextConfig);
     setFormConfig(nextConfig);
+    if(admin){
+      try{
+        await client.put('/migration/operator-source/publish',{source:{
+          appToken:nextConfig.appToken,tableId:nextConfig.tableId,viewId:nextConfig.viewId,
+        }});
+      }catch(e){
+        message.warning('采集表已保存，但共享配置发布失败；运营人员暂时无法读取');
+        return;
+      }
+    }
     message.success('飞书采集表配置已保存');
     await syncFeishuRecords(nextConfig);
   };

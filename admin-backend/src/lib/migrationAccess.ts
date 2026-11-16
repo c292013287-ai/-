@@ -22,6 +22,16 @@ export function scopedRows(rows:MigrationSourceRecord[], bindings:Binding[], ids
   const allowed=new Set(bindings.filter(b=>ids.includes(b.entityId)).map(b=>b.label));
   return rows.filter(row=>allowed.has(row.fields[entityField]?.trim()));
 }
+export function exactBindings(rows:MigrationSourceRecord[],entities:{id:number;name:string}[],saved:Binding[]) {
+  const mapped=new Map(saved.map(binding=>[binding.label,binding.entityId]));
+  const labels=new Set(rows.map(row=>row.fields[entityField]?.trim()).filter(Boolean));
+  for(const label of labels){
+    if(mapped.has(label))continue;
+    const matches=entities.filter(entity=>entity.name.trim()===label);
+    if(matches.length===1)mapped.set(label,matches[0].id);
+  }
+  return [...mapped].map(([label,entityId])=>({label,entityId}));
+}
 export function validOperation(fields:Record<string,unknown>, existing:Record<string,string>) {
   const keys=Object.keys(fields);
   if(keys.length===1 && typeof fields.备注==='string') return fields.备注.length<=2000;

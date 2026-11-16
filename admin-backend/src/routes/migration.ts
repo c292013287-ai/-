@@ -2,13 +2,13 @@ import { Router, Response } from 'express';
 import axios from 'axios';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { adminOnly, authMiddleware, AuthRequest } from '../middleware/auth';
 import { MigrationSnapshots, MigrationSource } from '../lib/migrationSnapshots';
 
 import prisma from '../lib/prisma';
 import { audit } from '../lib/securityAudit';
 import { entityManagementOnly } from '../middleware/entityManagement';
-import { accessKey, entityField, readAccess, saveAccess, scopedRows, validOperation, type Binding } from '../lib/migrationAccess';
+import { accessKey, entityField, exactBindings, readAccess, saveAccess, scopedRows, validOperation, type Binding } from '../lib/migrationAccess';
 
 const router = Router();
 router.use(authMiddleware);
@@ -231,6 +231,17 @@ router.put('/operator-source',entityManagementOnly,async(req:AuthRequest,res)=>{
     res.json({success:true});
   } catch {res.status(400).json({error:'无法保存运营源表配置'});}
 });
+router.put('/operator-source/publish',adminOnly,async(req:AuthRequest,res)=>{
+  try {
+    const source=sourceFromQuery(req.body?.source??{});
+    const previous=await readAccess();
+    const bindings=previous&&JSON.stringify(previous.source)===JSON.stringify(source)?previous.bindings:[];
+    await saveAccess({source,bindings});
+    await audit(req.userId!,'发布共享迁移源表配置',accessKey({source,bindings}));
+    void snapshots.read(source).catch(()=>console.error('[MigrationSync] Shared source refresh could not start'));
+    res.json({success:true});
+  } catch {res.status(400).json({error:'共享源表配置无效'});}
+});
 router.get('/operator-source/mappings',async(req:AuthRequest,res)=>{
   try {
     const access=await readAccess();
@@ -267,7 +278,9 @@ async function operatorSnapshot(req:AuthRequest,res:Response,force:boolean) {
   const snap=await snapshots.read(access.source,'',force);
   const key=accessKey(access);
   const rev=createHash('sha256').update(JSON.stringify([key,snap.revision,req.entityIds,req.permissions?.includes('phone')])).digest('hex');
-  const records=snap.records && rev!==req.query.revision ? scopedRows(snap.records,access.bindings,req.entityIds??[]).map(row=>{
+  const entities=snap.records?await prisma.wecomEntity.findMany({select:{id:true,name:true}}):[];
+  const bindings=snap.records?exactBindings(snap.records,entities,access.bindings):access.bindings;
+  const records=snap.records && rev!==req.query.revision ? scopedRows(snap.records,bindings,req.entityIds??[]).map(row=>{
     const fields=Object.fromEntries(Object.entries(row.fields).filter(([k])=>operatorColumns.has(k)).map(([k,v])=>
       [k,k.includes('手机号') && v && !req.permissions?.includes('phone')?'已脱敏':v]));
     return {...row,fields};
@@ -314,7 +327,8 @@ router.get('/feishu/records', async (req: AuthRequest, res: Response) => {
     if(req.userRole!=='admin'){
       const access=await readAccess();
       if(!access||JSON.stringify(access.source)!==JSON.stringify(source))return res.status(403).json({error:'只能读取管理员配置的迁移源表'});
-      records=scopedRows(records,access.bindings,req.entityIds??[]).map(row=>({...row,fields:Object.fromEntries(
+      const entities=await prisma.wecomEntity.findMany({select:{id:true,name:true}});
+      records=scopedRows(records,exactBindings(records,entities,access.bindings),req.entityIds??[]).map(row=>({...row,fields:Object.fromEntries(
         Object.entries(row.fields).filter(([key])=>operatorColumns.has(key)).map(([key,value])=>
           [key,key.includes('手机号')&&value&&!req.permissions?.includes('phone')?'已脱敏':value])
       )}));
@@ -344,7 +358,8 @@ router.patch('/feishu/records/:recordId', async (req: AuthRequest, res: Response
       if(operatorWrites.has(key)) return res.status(409).json({error:'记录正在处理，请稍后刷新'});
       operatorWrites.add(key);lock=key;
       const rows=await sharedRecords(access.source);
-      const row=scopedRows(rows,access.bindings,req.entityIds??[]).find(r=>r.recordId===recordId);
+      const entities=await prisma.wecomEntity.findMany({select:{id:true,name:true}});
+      const row=scopedRows(rows,exactBindings(rows,entities,access.bindings),req.entityIds??[]).find(r=>r.recordId===recordId);
       if(!row) return res.status(403).json({error:'该记录不在授权范围'});
       if(!validOperation(fields,row.fields)) return res.status(400).json({error:'只能修改备注或提交完整且尚未推送的处理信息'});
       const current=await readAccess();
