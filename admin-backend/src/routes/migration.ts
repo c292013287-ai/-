@@ -231,6 +231,35 @@ router.put('/operator-source',entityManagementOnly,async(req:AuthRequest,res)=>{
     res.json({success:true});
   } catch {res.status(400).json({error:'无法保存运营源表配置'});}
 });
+router.get('/operator-source/mappings',async(req:AuthRequest,res)=>{
+  try {
+    const access=await readAccess();
+    if(!access)return res.status(409).json({error:'管理员尚未配置迁移源表'});
+    const snapshot=await snapshots.read(access.source);
+    if(!snapshot.ready||!snapshot.records)return res.status(409).json({error:'迁移源表尚未就绪'});
+    const labels=[...new Set([...snapshot.records.map(r=>r.fields[entityField]?.trim()).filter(Boolean),...access.bindings.map(b=>b.label)])].sort();
+    const entities=await prisma.wecomEntity.findMany({where:{id:{in:req.entityIds??[]}},select:{id:true,name:true},orderBy:{name:'asc'}});
+    res.json({labels,entities,bindings:access.bindings.filter(b=>(req.entityIds??[]).includes(b.entityId))});
+  } catch {res.status(503).json({error:'读取匹配选项失败'});}
+});
+router.put('/operator-source/mappings',async(req:AuthRequest,res)=>{
+  try {
+    const {label,entityId}=req.body??{};
+    if(typeof label!=='string'||!label.trim()||label!==label.trim()||!Number.isSafeInteger(entityId)||!(req.entityIds??[]).includes(entityId))
+      return res.status(400).json({error:'只能匹配到自己已授权的主体'});
+    const access=await readAccess();
+    if(!access)return res.status(409).json({error:'管理员尚未配置迁移源表'});
+    const snapshot=await snapshots.read(access.source);
+    if(!snapshot.ready||!snapshot.records)return res.status(409).json({error:'迁移源表尚未就绪'});
+    const labels=new Set(snapshot.records.map(r=>r.fields[entityField]?.trim()).filter(Boolean));
+    if(!labels.has(label))return res.status(400).json({error:'源表选项不存在'});
+    const bindings=access.bindings.filter(b=>b.label!==label);
+    bindings.push({label,entityId});
+    await saveAccess({...access,bindings});
+    await audit(req.userId!,'匹配迁移源表主体',String(entityId));
+    res.json({success:true});
+  } catch {res.status(503).json({error:'匹配保存失败，请重试'});}
+});
 async function operatorSnapshot(req:AuthRequest,res:Response,force:boolean) {
   if(Object.keys(req.query).some(k=>k!=='revision')) return res.status(403).json({error:'不能指定其他源表'});
   const access=await readAccess();

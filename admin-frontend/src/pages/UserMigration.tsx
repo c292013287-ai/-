@@ -1,4 +1,5 @@
 import {useAccess} from '../lib/access';
+import MigrationOperatorBindings from './MigrationOperatorBindings';
 import {recordOperation} from '../api/auth';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -99,7 +100,7 @@ function copyTextFallback(value: string) {
 
 export default function UserMigration() {
   const navigate = useNavigate();
-  const {admin}=useAccess();
+  const {admin,can}=useAccess();
   const fixedStart = Grid.useBreakpoint().md ? 'left' as const : undefined;
   const accessRef=useRef('');
   const [records, setRecords] = useState<MigrationRecord[]>(() => admin ? loadMigrationRecords() : []);
@@ -611,6 +612,7 @@ export default function UserMigration() {
         extra={(
           <Space wrap>
             <Button icon={<SaveOutlined />} loading={syncing} onClick={handleSaveAndSync}>保存并同步</Button>
+            {!admin&&can('migrationBinding')&&<MigrationOperatorBindings/>}
             {admin && <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/migration/collect')}>采集信息</Button>}
           </Space>
         )}
